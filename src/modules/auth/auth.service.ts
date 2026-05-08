@@ -1,0 +1,375 @@
+import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common'
+import { JwtService } from '@nestjs/jwt'
+import { Prisma, User, UserSession, UserStatus } from '@prisma/client'
+import { compare } from 'bcryptjs'
+import { createHash } from 'node:crypto'
+import {
+  AuthRequestContext,
+  AuthResponseSnapshot,
+  AuthTokenPayload,
+  LoginRequestDto,
+  PublicSessionSnapshot,
+  PublicTenantSnapshot,
+  PublicUserSnapshot,
+} from './auth.types'
+import { ROLE_DEFINITIONS } from './rbac.constants'
+import { PrismaService } from '../database/prisma.service'
+
+type UserWithAuthRelations = Prisma.UserGetPayload<{
+  include: {
+    memberships: {
+      include: {
+        tenant: true
+      }
+    }
+    securityProfile: true
+  }
+}>
+
+interface PasswordPolicySnapshot {
+  failedAttemptsThreshold: number
+  lockoutMinutes: number
+}
+
+const DEFAULT_PASSWORD_POLICY: PasswordPolicySnapshot = {
+  failedAttemptsThreshold: 5,
+  lockoutMinutes: 30,
+}
+
+function normalizeEmail(value: string) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function normalizeUserAgent(userAgent: string) {
+  return String(userAgent || '').trim()
+}
+
+function toIso(value: Date | string | null | undefined) {
+  if (!value) {
+    return null
+  }
+
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString()
+}
+
+function createFingerprint(userId: string, context: AuthRequestContext) {
+  return createHash('sha256').update(`${userId}:${context.ip}:${context.userAgent}`).digest('hex')
+}
+
+@Injectable()
+export class AuthService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
+  ) {}
+
+  async login(credentials: LoginRequestDto, context: AuthRequestContext): Promise<AuthResponseSnapshot> {
+    const email = normalizeEmail(credentials.email)
+    const password = String(credentials.password || '')
+
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: {
+        memberships: {
+          orderBy: { createdAt: 'asc' },
+          include: { tenant: true },
+        },
+        securityProfile: true,
+      },
+    })
+
+    if (!user) {
+      throw new UnauthorizedException('Credenciales invalidas. Revisa el email y la clave.')
+    }
+
+    if (user.status !== UserStatus.active) {
+      throw new ForbiddenException('Este usuario aun no esta habilitado por un administrador.')
+    }
+
+    const passwordPolicy = this.getPasswordPolicy(user)
+    this.ensureLoginAllowed(user)
+
+    const passwordMatches = user.passwordHash ? await compare(password, user.passwordHash) : false
+    if (!passwordMatches) {
+      await this.markFailedLogin(user, passwordPolicy)
+      throw new UnauthorizedException('Credenciales invalidas. Revisa el email y la clave.')
+    }
+
+    if (!user.memberships.length) {
+      throw new ForbiddenException('El usuario no tiene empresas asignadas.')
+    }
+
+    const now = new Date()
+    const activeTenant = this.resolveActiveTenant(user, user.memberships[0].tenant.id)
+    const session = await this.createSession(user, activeTenant.id, context, now)
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: now },
+    })
+
+    await this.prisma.userSecurityProfile.upsert({
+      where: { userId: user.id },
+      update: {
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        passwordUpdatedAt: user.securityProfile?.passwordUpdatedAt || now,
+      },
+      create: this.buildDefaultSecurityProfile(user.id, now),
+    })
+
+    const accessToken = await this.jwtService.signAsync({
+      sub: user.id,
+      sessionId: session.id,
+      tenantId: activeTenant.id,
+      email: user.email,
+      isSystemOwner: user.isSystemOwner,
+    })
+
+    return {
+      ok: true,
+      message: 'Sesion iniciada.',
+      accessToken,
+      user: this.mapUserSnapshot({ ...user, lastLoginAt: now }),
+      session: this.mapSessionSnapshot(session),
+      activeTenantId: activeTenant.id,
+      accessibleTenants: user.memberships.map((membership) => this.mapTenantSnapshot(membership.tenant)),
+      memberships: user.memberships.map((membership) => {
+        const roleDef = ROLE_DEFINITIONS.find((r) => r.id === membership.role)
+        return {
+          userId: user.id,
+          tenantId: membership.tenantId,
+          role: membership.role,
+          permissions: roleDef?.permissions || [],
+          accessibleViews: roleDef?.views || [],
+          access: roleDef?.access || {},
+        }
+      }),
+    }
+  }
+
+  async me(authUser: AuthTokenPayload): Promise<Omit<AuthResponseSnapshot, 'accessToken'>> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: authUser.sub },
+      include: {
+        memberships: {
+          orderBy: { createdAt: 'asc' },
+          include: { tenant: true },
+        },
+        securityProfile: true,
+      },
+    })
+
+    if (!user) {
+      throw new UnauthorizedException('Token de acceso invalido o expirado.')
+    }
+
+    const session = await this.prisma.userSession.findUnique({
+      where: { id: authUser.sessionId },
+    })
+
+    if (!session || session.revokedAt) {
+      throw new UnauthorizedException('Token de acceso invalido o expirado.')
+    }
+
+    const activeTenant = this.resolveActiveTenant(user, authUser.tenantId)
+    const now = new Date()
+
+    await this.prisma.userSession.update({
+      where: { id: session.id },
+      data: { lastSeenAt: now },
+    })
+
+    return {
+      ok: true,
+      message: 'Sesion activa.',
+      user: this.mapUserSnapshot(user),
+      session: this.mapSessionSnapshot({ ...session, lastSeenAt: now }),
+      activeTenantId: activeTenant.id,
+      accessibleTenants: user.memberships.map((membership) => this.mapTenantSnapshot(membership.tenant)),
+      memberships: user.memberships.map((membership) => {
+        const roleDef = ROLE_DEFINITIONS.find((r) => r.id === membership.role)
+        return {
+          userId: user.id,
+          tenantId: membership.tenantId,
+          role: membership.role,
+          permissions: roleDef?.permissions || [],
+          accessibleViews: roleDef?.views || [],
+          access: roleDef?.access || {},
+        }
+      }),
+    }
+  }
+
+  async logout(authUser: AuthTokenPayload) {
+    const session = await this.prisma.userSession.findUnique({
+      where: { id: authUser.sessionId },
+    })
+
+    if (session && !session.revokedAt) {
+      await this.prisma.userSession.update({
+        where: { id: session.id },
+        data: {
+          revokedAt: new Date(),
+          revokedBy: 'Usuario autenticado',
+        },
+      })
+    }
+
+    return {
+      ok: true,
+      message: 'Sesion cerrada.',
+    }
+  }
+
+  private ensureLoginAllowed(user: UserWithAuthRelations) {
+    const lockedUntil = user.securityProfile?.lockedUntil
+    if (lockedUntil && new Date(lockedUntil).getTime() > Date.now()) {
+      throw new ForbiddenException(`Cuenta bloqueada temporalmente hasta ${new Date(lockedUntil).toISOString()}.`)
+    }
+  }
+
+  private getPasswordPolicy(user: UserWithAuthRelations): PasswordPolicySnapshot {
+    const tenant = user.memberships[0]?.tenant
+    const settings = (tenant?.securitySettings || {}) as {
+      passwordPolicy?: Partial<PasswordPolicySnapshot>
+    }
+
+    return {
+      ...DEFAULT_PASSWORD_POLICY,
+      ...settings.passwordPolicy,
+    }
+  }
+
+  private resolveActiveTenant(user: UserWithAuthRelations, tenantId?: string) {
+    const memberships = user.memberships
+    const tenantFromToken = tenantId ? memberships.find((membership) => membership.tenantId === tenantId)?.tenant : null
+
+    return tenantFromToken || memberships[0].tenant
+  }
+
+  private async createSession(
+    user: UserWithAuthRelations,
+    tenantId: string,
+    context: AuthRequestContext,
+    now: Date,
+  ): Promise<UserSession> {
+    return this.prisma.userSession.create({
+      data: {
+        userId: user.id,
+        tenantId,
+        ip: context.ip || '127.0.0.1',
+        location: 'Local',
+        device: normalizeUserAgent(context.userAgent) || 'Navegador web',
+        browser: this.classifyBrowser(context.userAgent),
+        os: this.classifyOperatingSystem(context.userAgent),
+        fingerprint: createFingerprint(user.id, context),
+        createdAt: now,
+        lastSeenAt: now,
+      },
+    })
+  }
+
+  private async markFailedLogin(user: UserWithAuthRelations, policy: PasswordPolicySnapshot) {
+    const nextAttempts = (user.securityProfile?.failedLoginAttempts || 0) + 1
+    const lockedUntil =
+      nextAttempts >= policy.failedAttemptsThreshold
+        ? new Date(Date.now() + policy.lockoutMinutes * 60 * 1000)
+        : null
+
+    await this.prisma.userSecurityProfile.upsert({
+      where: { userId: user.id },
+      update: {
+        failedLoginAttempts: nextAttempts,
+        lockedUntil,
+      },
+      create: {
+        ...this.buildDefaultSecurityProfile(user.id, new Date()),
+        failedLoginAttempts: nextAttempts,
+        lockedUntil,
+      },
+    })
+  }
+
+  private buildDefaultSecurityProfile(userId: string, now: Date) {
+    return {
+      userId,
+      twoFactorEnabled: false,
+      twoFactorRequired: false,
+      passwordResetRequired: false,
+      passwordUpdatedAt: now,
+      resetRequestedAt: null,
+      tempPasswordExpiresAt: null,
+      riskLevel: 'low',
+      passwordHistory: [],
+      failedLoginAttempts: 0,
+      lockedUntil: null,
+      trustedFingerprints: [],
+    }
+  }
+
+  private classifyBrowser(userAgent: string) {
+    const normalized = normalizeUserAgent(userAgent).toLowerCase()
+
+    if (normalized.includes('edg/')) return 'Edge'
+    if (normalized.includes('chrome/')) return 'Chrome'
+    if (normalized.includes('firefox/')) return 'Firefox'
+    if (normalized.includes('safari/')) return 'Safari'
+    return 'Browser'
+  }
+
+  private classifyOperatingSystem(userAgent: string) {
+    const normalized = normalizeUserAgent(userAgent).toLowerCase()
+
+    if (normalized.includes('windows')) return 'Windows'
+    if (normalized.includes('mac os') || normalized.includes('macintosh')) return 'macOS'
+    if (normalized.includes('android')) return 'Android'
+    if (normalized.includes('iphone') || normalized.includes('ipad') || normalized.includes('ios')) return 'iOS'
+    if (normalized.includes('linux')) return 'Linux'
+    return 'OS'
+  }
+
+  private mapUserSnapshot(user: User): PublicUserSnapshot {
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      title: user.title,
+      status: user.status,
+      lastLoginAt: toIso(user.lastLoginAt),
+      isSystemOwner: user.isSystemOwner,
+      isDemoAccount: user.isDemoAccount,
+    }
+  }
+
+  private mapTenantSnapshot(tenant: any): PublicTenantSnapshot {
+    return {
+      id: tenant.id,
+      name: tenant.name,
+      prefix: tenant.prefix,
+      sector: tenant.sector || null,
+      city: tenant.city || null,
+      allowNegativeStock: tenant.allowNegativeStock,
+      costMethod: tenant.costMethod || null,
+      dianStatus: tenant.dianStatus || null,
+    }
+  }
+
+  private mapSessionSnapshot(session: UserSession): PublicSessionSnapshot {
+    return {
+      id: session.id,
+      userId: session.userId,
+      tenantId: session.tenantId,
+      ip: session.ip,
+      location: session.location,
+      device: session.device,
+      browser: session.browser,
+      os: session.os,
+      fingerprint: session.fingerprint,
+      createdAt: toIso(session.createdAt) || new Date().toISOString(),
+      lastSeenAt: toIso(session.lastSeenAt) || new Date().toISOString(),
+      revokedAt: toIso(session.revokedAt),
+      revokedBy: session.revokedBy || null,
+    }
+  }
+}

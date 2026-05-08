@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+.pgdata
+.env
+.env.local
+.env.*
+*.log
