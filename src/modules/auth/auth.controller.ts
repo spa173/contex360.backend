@@ -1,20 +1,103 @@
-import { Body, Controller, Get, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Get, Param, Post, Query, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common'
+import type { CookieOptions, Response } from 'express'
+import { AUTH_COOKIE_NAME, isOAuthProvider } from './auth.constants'
 import { AuthGuard } from './auth.guard'
 import { AuthenticatedRequest, LoginRequestDto } from './auth.types'
 import { AuthService } from './auth.service'
+import { getDefaultFrontendCallbackUrl } from './oauth.providers'
 
-function resolveRequestContext(request: AuthenticatedRequest) {
-  const forwardedFor = request.headers['x-forwarded-for']
-  const userAgent = request.headers['user-agent']
+function resolveRequestContext(request?: Partial<AuthenticatedRequest>) {
+  const forwardedFor = request?.headers?.['x-forwarded-for']
+  const userAgent = request?.headers?.['user-agent']
 
   return {
     ip:
       (Array.isArray(forwardedFor) ? forwardedFor[0] : forwardedFor) ||
-      request.ip ||
-      request.socket?.remoteAddress ||
+      request?.ip ||
+      request?.socket?.remoteAddress ||
       '127.0.0.1',
     userAgent: Array.isArray(userAgent) ? userAgent[0] || '' : userAgent || '',
   }
+}
+
+function parseCookieHeader(header: string | string[] | undefined) {
+  const value = Array.isArray(header) ? header[0] : header
+
+  if (!value) {
+    return {}
+  }
+
+  return value.split(';').reduce<Record<string, string>>((cookies, part) => {
+    const [rawKey, ...rawValue] = part.split('=')
+    const key = rawKey.trim()
+
+    if (!key) {
+      return cookies
+    }
+
+    cookies[key] = rawValue.join('=').trim()
+    return cookies
+  }, {})
+}
+
+function extractAuthToken(request: AuthenticatedRequest) {
+  const authorization = request.headers.authorization
+  const bearer = Array.isArray(authorization) ? authorization[0] : authorization
+
+  const cookies = parseCookieHeader(request.headers.cookie)
+  if (cookies[AUTH_COOKIE_NAME]) {
+    return cookies[AUTH_COOKIE_NAME]
+  }
+
+  if (bearer?.startsWith('Bearer ')) {
+    return bearer.slice('Bearer '.length).trim()
+  }
+
+  return ''
+}
+
+function resolveCookieOptions(): CookieOptions {
+  const sameSiteValue = String(process.env.AUTH_COOKIE_SAMESITE || '').trim().toLowerCase()
+  const sameSite =
+    sameSiteValue === 'strict' || sameSiteValue === 'lax' || sameSiteValue === 'none'
+      ? sameSiteValue
+      : process.env.NODE_ENV === 'production'
+        ? 'none'
+        : 'lax'
+
+  const secureEnv = String(process.env.AUTH_COOKIE_SECURE || '').trim().toLowerCase()
+  const secure =
+    secureEnv === 'true'
+      ? true
+      : secureEnv === 'false'
+        ? false
+        : process.env.NODE_ENV === 'production'
+
+  const options: CookieOptions = {
+    httpOnly: true,
+    sameSite,
+    secure,
+    path: '/',
+  }
+
+  const domain = String(process.env.AUTH_COOKIE_DOMAIN || '').trim()
+  if (domain) {
+    options.domain = domain
+  }
+
+  return options
+}
+
+function setAuthCookie(response: Response, token: string) {
+  response.cookie(AUTH_COOKIE_NAME, token, resolveCookieOptions())
+}
+
+function clearAuthCookie(response: Response) {
+  response.clearCookie(AUTH_COOKIE_NAME, resolveCookieOptions())
+}
+
+function redirectToFrontend(response: Response, redirectTo: string) {
+  response.redirect(redirectTo || getDefaultFrontendCallbackUrl())
 }
 
 @Controller('auth')
@@ -22,8 +105,65 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
-  login(@Body() body: LoginRequestDto, @Req() request: AuthenticatedRequest) {
-    return this.authService.login(body, resolveRequestContext(request))
+  async login(
+    @Body() body: LoginRequestDto,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response?: Response,
+  ) {
+    const result = await this.authService.login(body, resolveRequestContext(request))
+    if (response) {
+      setAuthCookie(response, result.accessToken)
+    }
+    return result
+  }
+
+  @Get('oauth/:provider')
+  async oauthStart(
+    @Param('provider') provider: string,
+    @Query('redirectTo') redirectTo?: string,
+    @Res() response?: Response,
+  ) {
+    if (!isOAuthProvider(provider)) {
+      throw new BadRequestException('Proveedor OAuth invalido.')
+    }
+
+    const authorizationUrl = await this.authService.buildOAuthAuthorizationUrl(provider, redirectTo)
+    response?.redirect(authorizationUrl)
+  }
+
+  @Get('oauth/:provider/callback')
+  async oauthCallback(
+    @Param('provider') provider: string,
+    @Query('code') code?: string,
+    @Query('state') state?: string,
+    @Req() request?: AuthenticatedRequest,
+    @Res() response?: Response,
+  ) {
+    const fallbackRedirect = getDefaultFrontendCallbackUrl()
+
+    try {
+      if (!isOAuthProvider(provider)) {
+        throw new BadRequestException('Proveedor OAuth invalido.')
+      }
+
+      const result = await this.authService.completeOAuthLogin(
+        provider,
+        code || '',
+        state || '',
+        resolveRequestContext(request),
+      )
+
+      if (response) {
+        setAuthCookie(response, result.auth.accessToken)
+        redirectToFrontend(response, result.redirectTo)
+      }
+    } catch (error) {
+      if (response) {
+        clearAuthCookie(response)
+        const message = error instanceof Error ? error.message : 'oauth_error'
+        response.redirect(`${fallbackRedirect}?error=${encodeURIComponent(message)}`)
+      }
+    }
   }
 
   @UseGuards(AuthGuard)
@@ -36,13 +176,24 @@ export class AuthController {
     return this.authService.me(request.authUser)
   }
 
-  @UseGuards(AuthGuard)
   @Post('logout')
-  logout(@Req() request: AuthenticatedRequest) {
-    if (!request.authUser) {
-      throw new UnauthorizedException('Token de acceso requerido.')
+  async logout(@Req() request: AuthenticatedRequest, @Res({ passthrough: true }) response?: Response) {
+    const token = extractAuthToken(request)
+
+    if (token) {
+      const authUser = await this.authService.verifyAuthToken(token, true)
+      if (authUser) {
+        await this.authService.logout(authUser)
+      }
     }
 
-    return this.authService.logout(request.authUser)
+    if (response) {
+      clearAuthCookie(response)
+    }
+
+    return {
+      ok: true,
+      message: 'Sesion cerrada.',
+    }
   }
 }

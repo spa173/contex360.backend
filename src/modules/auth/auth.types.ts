@@ -1,6 +1,7 @@
 import { UserStatus } from '@prisma/client'
 import { Transform } from 'class-transformer'
 import { IsEmail, IsString, MinLength } from 'class-validator'
+import { OAuthProvider } from './auth.constants'
 
 export class LoginRequestDto {
   @Transform(({ value }) => String(value || '').trim().toLowerCase())
@@ -30,6 +31,7 @@ export interface AuthenticatedRequest {
   authUser?: AuthTokenPayload
   headers: {
     authorization?: string | string[]
+    cookie?: string | string[]
     'user-agent'?: string | string[]
     'x-forwarded-for'?: string | string[]
   }
@@ -94,4 +96,23 @@ export interface AuthResponseSnapshot {
   activeTenantId: string
   accessibleTenants: PublicTenantSnapshot[]
   memberships: AuthMembershipSnapshot[]
+}
+
+export interface OAuthStatePayload {
+  provider: OAuthProvider
+  redirectTo: string
+  nonce: string
+}
+
+export interface OAuthLoginResult {
+  auth: AuthResponseSnapshot
+  redirectTo: string
+  provider: OAuthProvider
+  profile: {
+    provider: OAuthProvider
+    providerAccountId: string
+    email: string
+    name: string
+    picture: string | null
+  }
 }

@@ -7,6 +7,7 @@ Backend inicial para Contex360 construido con NestJS.
 - API base con `GET /`
 - health check en `GET /health`
 - autenticacion con `POST /auth/login`, `GET /auth/me` y `POST /auth/logout`
+- inicio de sesion con Google via OAuth en `GET /auth/oauth/:provider` y `GET /auth/oauth/:provider/callback`
 - Swagger en `/docs`
 - configuracion por `.env`
 - Prisma listo para PostgreSQL
@@ -23,6 +24,21 @@ npm run start:dev
 ## Variables de entorno
 
 Copiar `.env.example` como `.env` antes de arrancar.
+
+Variables clave para OAuth:
+
+- `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET`
+- `OAUTH_STATE_SECRET` para firmar el `state` de OAuth
+- `FRONTEND_URL` para validar el `redirectTo` del frontend
+- `BACKEND_PUBLIC_URL` para construir los callback URLs de OAuth
+- `AUTH_COOKIE_SAMESITE`, `AUTH_COOKIE_SECURE` y `AUTH_COOKIE_DOMAIN` para la cookie httpOnly de sesion
+
+Si frontend y backend viven en dominios distintos en produccion, usa `AUTH_COOKIE_SAMESITE=none` y `AUTH_COOKIE_SECURE=true`.
+
+Rutas OAuth:
+
+- `GET /auth/oauth/google?redirectTo=https://tu-frontend/auth/callback`
+- `GET /auth/oauth/google/callback`
 
 ## Prisma
 

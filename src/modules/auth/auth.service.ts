@@ -2,11 +2,13 @@ import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/c
 import { JwtService } from '@nestjs/jwt'
 import { Prisma, User, UserSession, UserStatus } from '@prisma/client'
 import { compare } from 'bcryptjs'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import {
   AuthRequestContext,
   AuthResponseSnapshot,
   AuthTokenPayload,
+  OAuthLoginResult,
+  OAuthStatePayload,
   LoginRequestDto,
   PublicSessionSnapshot,
   PublicTenantSnapshot,
@@ -14,6 +16,15 @@ import {
 } from './auth.types'
 import { ROLE_DEFINITIONS } from './rbac.constants'
 import { PrismaService } from '../database/prisma.service'
+import { OAuthProvider } from './auth.constants'
+import {
+  buildOAuthAuthorizationUrl,
+  exchangeOAuthCodeForToken,
+  fetchOAuthProfile,
+  getDefaultFrontendCallbackUrl,
+  resolveAllowedRedirectTo,
+  OAuthProfileSnapshot,
+} from './oauth.providers'
 
 type UserWithAuthRelations = Prisma.UserGetPayload<{
   include: {
@@ -99,52 +110,60 @@ export class AuthService {
       throw new ForbiddenException('El usuario no tiene empresas asignadas.')
     }
 
-    const now = new Date()
-    const activeTenant = this.resolveActiveTenant(user, user.memberships[0].tenant.id)
-    const session = await this.createSession(user, activeTenant.id, context, now)
+    return this.issueAuthResponse(user, context)
+  }
 
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: now },
-    })
+  async buildOAuthAuthorizationUrl(provider: OAuthProvider, redirectTo?: string) {
+    const state = await this.createOAuthState(provider, resolveAllowedRedirectTo(redirectTo))
+    return buildOAuthAuthorizationUrl(provider, state)
+  }
 
-    await this.prisma.userSecurityProfile.upsert({
-      where: { userId: user.id },
-      update: {
-        failedLoginAttempts: 0,
-        lockedUntil: null,
-        passwordUpdatedAt: user.securityProfile?.passwordUpdatedAt || now,
-      },
-      create: this.buildDefaultSecurityProfile(user.id, now),
-    })
+  async completeOAuthLogin(
+    provider: OAuthProvider,
+    code: string,
+    state: string,
+    context: AuthRequestContext,
+  ): Promise<OAuthLoginResult> {
+    if (!code) {
+      throw new UnauthorizedException('No se recibio el codigo OAuth.')
+    }
 
-    const accessToken = await this.jwtService.signAsync({
-      sub: user.id,
-      sessionId: session.id,
-      tenantId: activeTenant.id,
-      email: user.email,
-      isSystemOwner: user.isSystemOwner,
-    })
+    const statePayload = await this.verifyOAuthState(state, provider)
+    const tokenSet = await exchangeOAuthCodeForToken(provider, code)
+    const accessToken = tokenSet.access_token
+    if (!accessToken) {
+      throw new UnauthorizedException('No se recibio el access token OAuth.')
+    }
+
+    const profile = await fetchOAuthProfile(provider, accessToken)
+    const user = await this.resolveOAuthUser(profile)
+    const auth = await this.issueAuthResponse(user, context)
 
     return {
-      ok: true,
-      message: 'Sesion iniciada.',
-      accessToken,
-      user: this.mapUserSnapshot({ ...user, lastLoginAt: now }),
-      session: this.mapSessionSnapshot(session),
-      activeTenantId: activeTenant.id,
-      accessibleTenants: user.memberships.map((membership) => this.mapTenantSnapshot(membership.tenant)),
-      memberships: user.memberships.map((membership) => {
-        const roleDef = ROLE_DEFINITIONS.find((r) => r.id === membership.role)
-        return {
-          userId: user.id,
-          tenantId: membership.tenantId,
-          role: membership.role,
-          permissions: roleDef?.permissions || [],
-          accessibleViews: roleDef?.views || [],
-          access: roleDef?.access || {},
-        }
-      }),
+      auth,
+      redirectTo: statePayload.redirectTo || getDefaultFrontendCallbackUrl(),
+      provider,
+      profile: {
+        provider: profile.provider,
+        providerAccountId: profile.providerAccountId,
+        email: profile.email,
+        name: profile.name,
+        picture: profile.picture,
+      },
+    }
+  }
+
+  async verifyAuthToken(token: string, ignoreExpiration = false) {
+    if (!token) {
+      return null
+    }
+
+    try {
+      return await this.jwtService.verifyAsync<AuthTokenPayload>(token, {
+        ignoreExpiration,
+      })
+    } catch {
+      return null
     }
   }
 
@@ -220,6 +239,122 @@ export class AuthService {
       ok: true,
       message: 'Sesion cerrada.',
     }
+  }
+
+  private async issueAuthResponse(user: UserWithAuthRelations, context: AuthRequestContext): Promise<AuthResponseSnapshot> {
+    if (user.status !== UserStatus.active) {
+      throw new ForbiddenException('Este usuario aun no esta habilitado por un administrador.')
+    }
+
+    if (!user.memberships.length) {
+      throw new ForbiddenException('El usuario no tiene empresas asignadas.')
+    }
+
+    const now = new Date()
+    const activeTenant = this.resolveActiveTenant(user, user.memberships[0].tenant.id)
+    const session = await this.createSession(user, activeTenant.id, context, now)
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { lastLoginAt: now },
+    })
+
+    await this.prisma.userSecurityProfile.upsert({
+      where: { userId: user.id },
+      update: {
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        passwordUpdatedAt: user.securityProfile?.passwordUpdatedAt || now,
+      },
+      create: this.buildDefaultSecurityProfile(user.id, now),
+    })
+
+    const accessToken = await this.jwtService.signAsync({
+      sub: user.id,
+      sessionId: session.id,
+      tenantId: activeTenant.id,
+      email: user.email,
+      isSystemOwner: user.isSystemOwner,
+    })
+
+    return {
+      ok: true,
+      message: 'Sesion iniciada.',
+      accessToken,
+      user: this.mapUserSnapshot({ ...user, lastLoginAt: now }),
+      session: this.mapSessionSnapshot(session),
+      activeTenantId: activeTenant.id,
+      accessibleTenants: user.memberships.map((membership) => this.mapTenantSnapshot(membership.tenant)),
+      memberships: user.memberships.map((membership) => {
+        const roleDef = ROLE_DEFINITIONS.find((r) => r.id === membership.role)
+        return {
+          userId: user.id,
+          tenantId: membership.tenantId,
+          role: membership.role,
+          permissions: roleDef?.permissions || [],
+          accessibleViews: roleDef?.views || [],
+          access: roleDef?.access || {},
+        }
+      }),
+    }
+  }
+
+  private async createOAuthState(provider: OAuthProvider, redirectTo: string) {
+    return this.jwtService.signAsync(
+      {
+        provider,
+        redirectTo,
+        nonce: randomUUID(),
+      } satisfies OAuthStatePayload,
+      {
+        secret: this.getOAuthStateSecret(),
+        expiresIn: '10m',
+      },
+    )
+  }
+
+  private async verifyOAuthState(state: string, provider: OAuthProvider) {
+    if (!state) {
+      throw new UnauthorizedException('No se recibio el estado OAuth.')
+    }
+
+    const payload = await this.jwtService.verifyAsync<OAuthStatePayload>(state, {
+      secret: this.getOAuthStateSecret(),
+    })
+
+    if (payload.provider !== provider) {
+      throw new UnauthorizedException('Estado OAuth invalido.')
+    }
+
+    return {
+      ...payload,
+      redirectTo: resolveAllowedRedirectTo(payload.redirectTo),
+    }
+  }
+
+  private getOAuthStateSecret() {
+    return process.env.OAUTH_STATE_SECRET || process.env.JWT_SECRET || 'change-me-in-development'
+  }
+
+  private async resolveOAuthUser(profile: OAuthProfileSnapshot) {
+    const user = await this.prisma.user.findUnique({
+      where: { email: profile.email },
+      include: {
+        memberships: {
+          orderBy: { createdAt: 'asc' },
+          include: { tenant: true },
+        },
+        securityProfile: true,
+      },
+    })
+
+    if (!user) {
+      throw new UnauthorizedException(
+        `No existe una cuenta corporativa asociada a ${profile.email}. Solicita acceso al administrador.`,
+      )
+    }
+
+    return user
   }
 
   private ensureLoginAllowed(user: UserWithAuthRelations) {

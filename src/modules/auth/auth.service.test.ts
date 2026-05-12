@@ -83,6 +83,7 @@ describe('AuthService', () => {
   }
   let jwtService: {
     signAsync: ReturnType<typeof vi.fn>
+    verifyAsync: ReturnType<typeof vi.fn>
   }
   let service: AuthService
 
@@ -106,7 +107,26 @@ describe('AuthService', () => {
     }
 
     jwtService = {
-      signAsync: vi.fn(async () => 'token-123'),
+      signAsync: vi.fn(async (payload: Record<string, unknown>) => {
+        if ('provider' in payload) {
+          return `state:${Buffer.from(JSON.stringify(payload)).toString('base64url')}`
+        }
+
+        return 'token-123'
+      }),
+      verifyAsync: vi.fn(async (token: string) => {
+        if (token.startsWith('state:')) {
+          return JSON.parse(Buffer.from(token.slice('state:'.length), 'base64url').toString('utf8'))
+        }
+
+        return {
+          sub: 'user-demo',
+          sessionId: 'sess-1',
+          tenantId: 'tenant-a',
+          email: 'admin@contex360.local',
+          isSystemOwner: true,
+        }
+      }),
     }
 
     service = new AuthService(prisma as unknown as PrismaService, jwtService as unknown as JwtService)
@@ -114,6 +134,7 @@ describe('AuthService', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.unstubAllEnvs()
   })
 
   it('logs in a valid user and returns the auth snapshot', async () => {
@@ -159,6 +180,74 @@ describe('AuthService', () => {
     expect(prisma.userSession.create).toHaveBeenCalledTimes(1)
     expect(prisma.user.update).toHaveBeenCalledTimes(1)
     expect(prisma.userSecurityProfile.upsert).toHaveBeenCalledTimes(1)
+  })
+
+  it('builds and completes a google oauth login using the existing corporate user', async () => {
+    vi.stubEnv('GOOGLE_CLIENT_ID', 'google-client-id')
+    vi.stubEnv('GOOGLE_CLIENT_SECRET', 'google-client-secret')
+    vi.stubEnv('BACKEND_PUBLIC_URL', 'http://localhost:3001')
+    vi.stubEnv('FRONTEND_URL', 'https://contex360fronted.vercel.app')
+    vi.stubEnv('OAUTH_STATE_SECRET', 'oauth-state-secret')
+
+    const googleAuthUrl = await service.buildOAuthAuthorizationUrl(
+      'google',
+      'https://contex360fronted.vercel.app/auth/callback',
+    )
+    const state = new URL(googleAuthUrl).searchParams.get('state') || ''
+
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        text: async () =>
+          JSON.stringify({
+            access_token: 'google-access-token',
+            token_type: 'Bearer',
+            expires_in: 3600,
+          }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        text: async () =>
+          JSON.stringify({
+            id: 'google-sub-123',
+            email: 'admin@contex360.local',
+            name: 'Camilo Demo',
+            picture: 'https://example.com/avatar.png',
+          }),
+      })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    const user = buildUser()
+    prisma.user.findUnique.mockResolvedValue(user)
+    prisma.userSession.create.mockImplementation(async ({ data }) => ({
+      id: 'sess-google-1',
+      ...data,
+    }))
+    prisma.user.update.mockResolvedValue(user)
+    prisma.userSecurityProfile.upsert.mockResolvedValue({})
+
+    const result = await service.completeOAuthLogin(
+      'google',
+      'oauth-code-123',
+      state,
+      {
+        ip: '127.0.0.1',
+        userAgent: 'Mozilla/5.0 Chrome/124.0.0.0',
+      },
+    )
+
+    expect(result.provider).toBe('google')
+    expect(result.redirectTo).toBe('https://contex360fronted.vercel.app/auth/callback')
+    expect(result.auth.accessToken).toBe('token-123')
+    expect(result.profile.email).toBe('admin@contex360.local')
+    expect(prisma.userSession.create).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
   it('rejects invalid credentials and tracks the failed login', async () => {

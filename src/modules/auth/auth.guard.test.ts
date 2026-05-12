@@ -2,13 +2,15 @@ import { UnauthorizedException } from '@nestjs/common'
 import { describe, expect, it, vi } from 'vitest'
 import { JwtService } from '@nestjs/jwt'
 import { AuthGuard } from './auth.guard'
+import { AUTH_COOKIE_NAME } from './auth.constants'
 
-function buildContext(authorization?: string) {
+function buildContext(authorization?: string, cookie?: string) {
   return {
     switchToHttp: () => ({
       getRequest: () => ({
         headers: {
           authorization,
+          cookie,
         },
       }),
     }),
@@ -43,5 +45,22 @@ describe('AuthGuard', () => {
     await expect(guard.canActivate(buildContext() as any)).rejects.toBeInstanceOf(
       UnauthorizedException,
     )
+  })
+
+  it('extracts and verifies the session token from cookies', async () => {
+    const jwtService = {
+      verifyAsync: vi.fn(async () => ({
+        sub: 'user-demo',
+        sessionId: 'sess-1',
+        tenantId: 'tenant-a',
+        email: 'admin@contex360.local',
+      })),
+    } as unknown as JwtService
+
+    const guard = new AuthGuard(jwtService)
+    const context = buildContext(undefined, `${AUTH_COOKIE_NAME}=cookie-token-123`) as any
+
+    await expect(guard.canActivate(context)).resolves.toBe(true)
+    expect(jwtService.verifyAsync).toHaveBeenCalledWith('cookie-token-123')
   })
 })
