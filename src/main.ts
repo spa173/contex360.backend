@@ -20,7 +20,7 @@ async function bootstrap() {
   const corsOrigin = parseCorsOrigin(configService.get<string>('CORS_ORIGIN'))
 
   app.enableCors({
-    origin: corsOrigin,
+    origin: true,
     credentials: true,
   })
 
@@ -44,7 +44,7 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, swaggerConfig)
   SwaggerModule.setup(swaggerPath, app, document)
 
-  await app.listen(port)
+  await app.listen(port, '0.0.0.0')
 
   const url = await app.getUrl()
   logger.log(`${appName} running at ${url}`)
