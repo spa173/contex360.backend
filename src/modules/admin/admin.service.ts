@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { AuditSeverity, Prisma, UserStatus } from '@prisma/client'
 import { createHash, randomBytes } from 'crypto'
-import { hashSync } from 'bcryptjs'
+import { hashSync, compareSync } from 'bcryptjs'
 import { PrismaService } from '../database/prisma.service'
 import { NotificationService } from '../notification/notification.service'
 
@@ -358,8 +358,7 @@ export class AdminService {
     const actorUser = await this.prisma.user.findUnique({ where: { id: actorUserId } })
     if (!actorUser) throw new NotFoundException('Usuario administrador no encontrado.')
     
-    // Verificar contraseña usando bcryptjs (asumiendo que compareSync está disponible o se añade)
-    const { compareSync } = require('bcryptjs')
+    // Verificar contraseña usando bcryptjs
     const isValid = compareSync(password, actorUser.passwordHash)
     if (!isValid) throw new UnauthorizedException('La contraseña proporcionada es incorrecta.')
 
