@@ -4,7 +4,7 @@ import TelegramBot from 'node-telegram-bot-api';
 
 @Injectable()
 export class TelegramService {
-  private bot: TelegramBot;
+  private bot: TelegramBot | null;
   private chatId: string;
 
   constructor(private readonly configService: ConfigService) {
@@ -13,6 +13,8 @@ export class TelegramService {
 
     if (token) {
       this.bot = new TelegramBot(token, { polling: false });
+    } else {
+      this.bot = null;
     }
   }
 
