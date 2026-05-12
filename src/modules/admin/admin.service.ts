@@ -359,6 +359,9 @@ export class AdminService {
     if (!actorUser) throw new NotFoundException('Usuario administrador no encontrado.')
     
     // Verificar contraseña usando bcryptjs
+    if (!actorUser.passwordHash) {
+      throw new UnauthorizedException('El usuario no tiene una contraseña válida configurada.')
+    }
     const isValid = compareSync(password, actorUser.passwordHash)
     if (!isValid) throw new UnauthorizedException('La contraseña proporcionada es incorrecta.')
 
