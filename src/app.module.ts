@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler'
-import { APP_GUARD } from '@nestjs/core'
+import { ThrottlerModule } from '@nestjs/throttler'
 import { ScheduleModule } from '@nestjs/schedule'
 import { AppController } from './app.controller'
 import { AppService } from './app.service'
@@ -27,8 +26,8 @@ import { TelegramModule } from './modules/telegram/telegram.module'
       envFilePath: ['.env.local', '.env'],
     }),
     ThrottlerModule.forRoot([
-      { name: 'short', ttl: 60000, limit: 10 },
-      { name: 'long', ttl: 3600000, limit: 100 },
+      { name: 'short', ttl: 60000, limit: 100 }, // Aumentado el límite para evitar falsos positivos
+      { name: 'long', ttl: 3600000, limit: 1000 },
     ]),
     ScheduleModule.forRoot(),
     PrismaModule,
@@ -48,7 +47,8 @@ import { TelegramModule } from './modules/telegram/telegram.module'
   controllers: [AppController],
   providers: [
     AppService,
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    // Comentado temporalmente el guard global para descartar bloqueos de CORS por Throttling
+    // { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule {}
