@@ -91,11 +91,19 @@ export interface AuthResponseSnapshot {
   ok: true
   message: string
   accessToken: string
+  refreshToken: string
   user: PublicUserSnapshot
   session: PublicSessionSnapshot
   activeTenantId: string
   accessibleTenants: PublicTenantSnapshot[]
   memberships: AuthMembershipSnapshot[]
+}
+
+export class RefreshTokenDto {
+  @Transform(({ value }) => String(value || '').trim())
+  @IsString({ message: 'El refresh token es requerido.' })
+  @MinLength(1, { message: 'El refresh token es requerido.' })
+  refreshToken!: string
 }
 
 export interface OAuthStatePayload {

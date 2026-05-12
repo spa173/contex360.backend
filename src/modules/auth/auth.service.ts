@@ -2,7 +2,7 @@ import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/c
 import { JwtService } from '@nestjs/jwt'
 import { Prisma, User, UserSession, UserStatus } from '@prisma/client'
 import { compare } from 'bcryptjs'
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import {
   AuthRequestContext,
   AuthResponseSnapshot,
@@ -13,6 +13,7 @@ import {
   PublicSessionSnapshot,
   PublicTenantSnapshot,
   PublicUserSnapshot,
+  RefreshTokenDto,
 } from './auth.types'
 import { ROLE_DEFINITIONS } from './rbac.constants'
 import { PrismaService } from '../database/prisma.service'
@@ -153,6 +154,33 @@ export class AuthService {
     }
   }
 
+  async refresh(dto: RefreshTokenDto, context: AuthRequestContext): Promise<AuthResponseSnapshot> {
+    const tokenHash = createHash('sha256').update(dto.refreshToken).digest('hex')
+
+    const stored = await this.prisma.refreshToken.findUnique({
+      where: { tokenHash },
+      include: {
+        user: {
+          include: {
+            memberships: { orderBy: { createdAt: 'asc' }, include: { tenant: true } },
+            securityProfile: true,
+          },
+        },
+      },
+    })
+
+    if (!stored || stored.revokedAt || stored.expiresAt < new Date()) {
+      throw new UnauthorizedException('Refresh token invalido o expirado.')
+    }
+
+    await this.prisma.refreshToken.update({
+      where: { id: stored.id },
+      data: { revokedAt: new Date() },
+    })
+
+    return this.issueAuthResponse(stored.user, context)
+  }
+
   async verifyAuthToken(token: string, ignoreExpiration = false) {
     if (!token) {
       return null
@@ -167,7 +195,7 @@ export class AuthService {
     }
   }
 
-  async me(authUser: AuthTokenPayload): Promise<Omit<AuthResponseSnapshot, 'accessToken'>> {
+  async me(authUser: AuthTokenPayload): Promise<Omit<AuthResponseSnapshot, 'accessToken' | 'refreshToken'>> {
     const user = await this.prisma.user.findUnique({
       where: { id: authUser.sub },
       include: {
@@ -277,10 +305,19 @@ export class AuthService {
       isSystemOwner: user.isSystemOwner,
     })
 
+    const rawRefreshToken = randomBytes(48).toString('hex')
+    const tokenHash = createHash('sha256').update(rawRefreshToken).digest('hex')
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+
+    await this.prisma.refreshToken.create({
+      data: { tokenHash, userId: user.id, sessionId: session.id, expiresAt },
+    })
+
     return {
       ok: true,
       message: 'Sesion iniciada.',
       accessToken,
+      refreshToken: rawRefreshToken,
       user: this.mapUserSnapshot({ ...user, lastLoginAt: now }),
       session: this.mapSessionSnapshot(session),
       activeTenantId: activeTenant.id,

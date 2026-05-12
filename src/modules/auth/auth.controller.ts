@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, Param, Post, Query, Req, Re
 import type { CookieOptions, Response } from 'express'
 import { AUTH_COOKIE_NAME, isOAuthProvider } from './auth.constants'
 import { AuthGuard } from './auth.guard'
-import { AuthenticatedRequest, LoginRequestDto } from './auth.types'
+import { AuthenticatedRequest, LoginRequestDto, RefreshTokenDto } from './auth.types'
 import { AuthService } from './auth.service'
 import { getDefaultFrontendCallbackUrl } from './oauth.providers'
 
@@ -111,6 +111,19 @@ export class AuthController {
     @Res({ passthrough: true }) response?: Response,
   ) {
     const result = await this.authService.login(body, resolveRequestContext(request))
+    if (response) {
+      setAuthCookie(response, result.accessToken)
+    }
+    return result
+  }
+
+  @Post('refresh')
+  async refresh(
+    @Body() body: RefreshTokenDto,
+    @Req() request: AuthenticatedRequest,
+    @Res({ passthrough: true }) response?: Response,
+  ) {
+    const result = await this.authService.refresh(body, resolveRequestContext(request))
     if (response) {
       setAuthCookie(response, result.accessToken)
     }

@@ -63,6 +63,7 @@ model User {
   memberships       Membership[]
   securityProfile   UserSecurityProfile?
   sessions          UserSession[]
+  refreshTokens     RefreshToken[]
   inventoryMovements InventoryMovement[]
   auditEvents       AuditEvent[]          @relation("AuditActorUser")
   roleAccessHistory RoleAccessHistory[]    @relation("RoleAccessActorUser")
@@ -316,6 +317,21 @@ model UserSession {
 
   @@index([userId, tenantId])
   @@index([tenantId, revokedAt])
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  sessionId String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
 }
 
 model AuditEvent {
