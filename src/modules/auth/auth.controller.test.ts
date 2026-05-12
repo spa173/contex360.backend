@@ -1,4 +1,4 @@
-import { BadRequestException, UnauthorizedException } from '@nestjs/common'
+import { UnauthorizedException } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import { JwtService } from '@nestjs/jwt'
 import { describe, expect, it, vi } from 'vitest'
@@ -116,6 +116,39 @@ describe('AuthController', () => {
     )
   })
 
+  it('redirects to the frontend callback when OAuth start fails', async () => {
+    const authService = {
+      buildOAuthAuthorizationUrl: vi.fn(async () => {
+        throw new Error('Faltan credenciales OAuth de Google.')
+      }),
+    }
+
+    const moduleRef = await Test.createTestingModule({
+      controllers: [AuthController],
+      providers: [
+        {
+          provide: AuthService,
+          useValue: authService,
+        },
+        {
+          provide: JwtService,
+          useValue: {
+            verifyAsync: vi.fn(),
+          },
+        },
+      ],
+    }).compile()
+
+    const controller = moduleRef.get(AuthController)
+    const response = buildResponse()
+
+    await controller.oauthStart('google', 'https://contex360fronted.vercel.app/auth/callback', response as any)
+
+    expect(response.redirect).toHaveBeenCalledWith(
+      expect.stringContaining('auth/callback?error=Faltan%20credenciales%20OAuth%20de%20Google.'),
+    )
+  })
+
   it('clears the cookie on logout even when the token is already expired', async () => {
     const authService = {
       verifyAuthToken: vi.fn(async () => ({
@@ -199,7 +232,7 @@ describe('AuthController', () => {
     expect(() => controller.me({ headers: {} } as any)).toThrow(UnauthorizedException)
   })
 
-  it('rejects invalid OAuth providers', async () => {
+  it('redirects invalid OAuth providers back to the frontend with an error', async () => {
     const authService = {
       buildOAuthAuthorizationUrl: vi.fn(),
     }
@@ -221,9 +254,12 @@ describe('AuthController', () => {
     }).compile()
 
     const controller = moduleRef.get(AuthController)
+    const response = buildResponse()
 
-    await expect(controller.oauthStart('not-a-provider', undefined, buildResponse() as any)).rejects.toBeInstanceOf(
-      BadRequestException,
+    await controller.oauthStart('not-a-provider', undefined, response as any)
+
+    expect(response.redirect).toHaveBeenCalledWith(
+      expect.stringContaining('auth/callback?error=Proveedor%20OAuth%20invalido.'),
     )
   })
 })

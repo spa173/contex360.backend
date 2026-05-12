@@ -123,12 +123,24 @@ export class AuthController {
     @Query('redirectTo') redirectTo?: string,
     @Res() response?: Response,
   ) {
-    if (!isOAuthProvider(provider)) {
-      throw new BadRequestException('Proveedor OAuth invalido.')
-    }
+    const fallbackRedirect = getDefaultFrontendCallbackUrl()
 
-    const authorizationUrl = await this.authService.buildOAuthAuthorizationUrl(provider, redirectTo)
-    response?.redirect(authorizationUrl)
+    try {
+      if (!isOAuthProvider(provider)) {
+        throw new BadRequestException('Proveedor OAuth invalido.')
+      }
+
+      const authorizationUrl = await this.authService.buildOAuthAuthorizationUrl(provider, redirectTo)
+      response?.redirect(authorizationUrl)
+    } catch (error) {
+      if (response) {
+        const message = error instanceof Error ? error.message : 'oauth_error'
+        response.redirect(`${fallbackRedirect}?error=${encodeURIComponent(message)}`)
+        return
+      }
+
+      throw error
+    }
   }
 
   @Get('oauth/:provider/callback')
