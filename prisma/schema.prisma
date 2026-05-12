@@ -281,6 +281,7 @@ model UserSecurityProfile {
   userId                String   @unique
   twoFactorEnabled      Boolean  @default(false)
   twoFactorRequired     Boolean  @default(false)
+  totpSecret            String?
   passwordResetRequired Boolean  @default(false)
   passwordUpdatedAt     DateTime?
   resetRequestedAt      DateTime?

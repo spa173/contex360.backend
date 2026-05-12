@@ -6,6 +6,7 @@ import { PrismaModule } from '../database/prisma.module'
 import { AuthController } from './auth.controller'
 import { AuthGuard } from './auth.guard'
 import { AuthService } from './auth.service'
+import { TotpService } from './totp.service'
 
 @Module({
   imports: [
@@ -22,7 +23,7 @@ import { AuthService } from './auth.service'
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, AuthGuard],
-  exports: [AuthService, JwtModule, AuthGuard],
+  providers: [AuthService, AuthGuard, TotpService],
+  exports: [AuthService, JwtModule, AuthGuard, TotpService],
 })
 export class AuthModule {}

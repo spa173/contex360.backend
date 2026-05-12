@@ -4,6 +4,7 @@ import { AUTH_COOKIE_NAME, isOAuthProvider } from './auth.constants'
 import { AuthGuard } from './auth.guard'
 import { AuthenticatedRequest, LoginRequestDto, RefreshTokenDto } from './auth.types'
 import { AuthService } from './auth.service'
+import { TotpService } from './totp.service'
 import { getDefaultFrontendCallbackUrl } from './oauth.providers'
 
 function resolveRequestContext(request?: Partial<AuthenticatedRequest>) {
@@ -102,7 +103,10 @@ function redirectToFrontend(response: Response, redirectTo: string) {
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly totpService: TotpService,
+  ) {}
 
   @Post('login')
   async login(
@@ -199,6 +203,29 @@ export class AuthController {
     }
 
     return this.authService.me(request.authUser)
+  }
+
+  @UseGuards(AuthGuard)
+  @Get('totp/setup')
+  async totpSetup(@Req() request: AuthenticatedRequest) {
+    if (!request.authUser) throw new UnauthorizedException('Token de acceso requerido.')
+    return this.totpService.setupTotp(request.authUser.sub)
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('totp/confirm')
+  async totpConfirm(@Req() request: AuthenticatedRequest, @Body() body: { code: string }) {
+    if (!request.authUser) throw new UnauthorizedException('Token de acceso requerido.')
+    await this.totpService.confirmTotp(request.authUser.sub, body.code)
+    return { ok: true, message: '2FA activado correctamente.' }
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('totp/disable')
+  async totpDisable(@Req() request: AuthenticatedRequest, @Body() body: { code: string }) {
+    if (!request.authUser) throw new UnauthorizedException('Token de acceso requerido.')
+    await this.totpService.disableTotp(request.authUser.sub, body.code)
+    return { ok: true, message: '2FA desactivado.' }
   }
 
   @Post('logout')
