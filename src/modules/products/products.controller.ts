@@ -11,13 +11,13 @@ export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Get()
-  @Permissions('manage_inventory') // Only users with this permission can list products
+  @Permissions('view_inventory')
   findAll(@TenantId() tenantId: string) {
     return this.productsService.findAll(tenantId)
   }
 
   @Get(':id')
-  @Permissions('manage_inventory')
+  @Permissions('view_inventory')
   findOne(@Param('id') id: string, @TenantId() tenantId: string) {
     return this.productsService.findOne(id, tenantId)
   }

@@ -93,6 +93,7 @@ export class AdminController {
     name: string
     adminName: string
     adminEmail: string
+    prefix?: string
     plan?: string
     city?: string
   }) {

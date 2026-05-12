@@ -27,7 +27,14 @@ export const PERMISSION_ACTIONS = [
 export const ROLE_DEFINITIONS: RoleDefinition[] = [
   {
     id: 'Administrador',
-    permissions: ['emit_invoice', 'manage_inventory', 'manage_third_parties', 'run_ocr', 'manage_users'],
+    permissions: [
+      'view_dashboard', 'export_dashboard', 'manage_dashboard',
+      'view_billing', 'create_billing', 'manage_billing',
+      'view_inventory', 'manage_inventory',
+      'view_third_parties', 'manage_third_parties',
+      'view_accounting', 'manage_accounting',
+      'run_ocr', 'manage_users'
+    ],
     views: ['dashboard', 'billing', 'inventory', 'accounting', 'third-parties', 'users', 'ai'],
     access: {
       dashboard: ['view', 'export', 'configure'],
@@ -41,7 +48,14 @@ export const ROLE_DEFINITIONS: RoleDefinition[] = [
   },
   {
     id: 'Contador',
-    permissions: ['emit_invoice', 'manage_inventory', 'manage_third_parties', 'run_ocr'],
+    permissions: [
+      'view_dashboard', 'export_dashboard',
+      'view_billing', 'create_billing', 'manage_billing',
+      'view_inventory', 'manage_inventory',
+      'view_third_parties', 'manage_third_parties',
+      'view_accounting', 'manage_accounting',
+      'run_ocr'
+    ],
     views: ['dashboard', 'billing', 'inventory', 'accounting', 'third-parties', 'ai'],
     access: {
       dashboard: ['view', 'export'],
@@ -55,7 +69,13 @@ export const ROLE_DEFINITIONS: RoleDefinition[] = [
   },
   {
     id: 'Auxiliar contable',
-    permissions: ['emit_invoice', 'manage_third_parties', 'run_ocr'],
+    permissions: [
+      'view_dashboard',
+      'view_billing', 'create_billing',
+      'view_accounting', 'create_accounting',
+      'view_third_parties', 'manage_third_parties',
+      'run_ocr'
+    ],
     views: ['dashboard', 'billing', 'accounting', 'third-parties', 'ai'],
     access: {
       dashboard: ['view'],
@@ -68,22 +88,14 @@ export const ROLE_DEFINITIONS: RoleDefinition[] = [
     },
   },
   {
-    id: 'Usuario nomina',
-    permissions: [],
-    views: ['dashboard'],
-    access: {
-      dashboard: ['view'],
-      billing: [],
-      inventory: [],
-      accounting: [],
-      'third-parties': ['view'],
-      users: [],
-      ai: [],
-    },
-  },
-  {
     id: 'Gerencia',
-    permissions: [],
+    permissions: [
+      'view_dashboard', 'export_dashboard',
+      'view_billing', 'export_billing',
+      'view_inventory', 'export_inventory',
+      'view_accounting', 'export_accounting',
+      'view_third_parties'
+    ],
     views: ['dashboard', 'accounting'],
     access: {
       dashboard: ['view', 'export'],
@@ -97,7 +109,13 @@ export const ROLE_DEFINITIONS: RoleDefinition[] = [
   },
   {
     id: 'Visor',
-    permissions: [],
+    permissions: [
+      'view_dashboard', 'export_dashboard',
+      'view_billing', 'export_billing',
+      'view_inventory', 'export_inventory',
+      'view_accounting', 'export_accounting',
+      'view_third_parties'
+    ],
     views: ['dashboard', 'billing', 'inventory', 'accounting', 'third-parties'],
     access: {
       dashboard: ['view', 'export'],

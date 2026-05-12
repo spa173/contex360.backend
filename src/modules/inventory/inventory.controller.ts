@@ -11,7 +11,7 @@ export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 
   @Get('movements')
-  @Permissions('manage_inventory')
+  @Permissions('view_inventory')
   findAllMovements(@TenantId() tenantId: string, @Query('productId') productId?: string) {
     return this.inventoryService.findAllMovements(tenantId, productId)
   }
@@ -33,7 +33,7 @@ export class InventoryController {
   }
 
   @Get('kardex/:productId')
-  @Permissions('manage_inventory')
+  @Permissions('view_inventory')
   getKardex(@TenantId() tenantId: string, @Param('productId') productId: string) {
     return this.inventoryService.getKardex(tenantId, productId)
   }

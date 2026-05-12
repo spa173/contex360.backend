@@ -356,6 +356,7 @@ export class AdminService {
     name: string
     adminName: string
     adminEmail: string
+    prefix?: string
     plan?: string
     phone?: string
     city?: string
@@ -363,7 +364,7 @@ export class AdminService {
     const tempPassword = randomBytes(6).toString('base64').slice(0, 10) + 'A1!'
     const passwordHash = hashSync(tempPassword, 10)
 
-    const prefix = data.name.slice(0, 3).toUpperCase()
+    const prefix = data.prefix || data.name.slice(0, 3).toUpperCase()
 
     const tenant = await this.prisma.tenant.create({
       data: {

@@ -10,13 +10,13 @@ export class InvoicesController {
   constructor(private readonly invoicesService: InvoicesService) {}
 
   @Get()
-  @Permissions('manage_billing')
+  @Permissions('view_billing')
   findAll(@TenantId() tenantId: string) {
     return this.invoicesService.findAll(tenantId)
   }
 
   @Get(':id')
-  @Permissions('manage_billing')
+  @Permissions('view_billing')
   findOne(@TenantId() tenantId: string, @Param('id') id: string) {
     return this.invoicesService.findOne(tenantId, id)
   }

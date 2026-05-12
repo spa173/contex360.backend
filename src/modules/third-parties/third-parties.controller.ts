@@ -11,13 +11,13 @@ export class ThirdPartiesController {
   constructor(private readonly thirdPartiesService: ThirdPartiesService) {}
 
   @Get()
-  @Permissions('manage_third_parties')
+  @Permissions('view_third_parties')
   findAll(@TenantId() tenantId: string, @Query('kind') kind?: ThirdPartyKind) {
     return this.thirdPartiesService.findAll(tenantId, kind)
   }
 
   @Get(':id')
-  @Permissions('manage_third_parties')
+  @Permissions('view_third_parties')
   findOne(@TenantId() tenantId: string, @Param('id') id: string) {
     return this.thirdPartiesService.findOne(tenantId, id)
   }
