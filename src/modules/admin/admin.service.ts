@@ -352,6 +352,14 @@ export class AdminService {
     })
   }
 
+  async deleteTenant(id: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id } })
+    if (!tenant) throw new NotFoundException('Empresa no encontrada.')
+    
+    // Al eliminar el tenant, Prisma cascade borrará membresías, productos, facturas, etc.
+    return this.prisma.tenant.delete({ where: { id } })
+  }
+
   async createCompany(data: {
     name: string
     adminName: string
@@ -890,15 +898,5 @@ export class AdminService {
     const middle = highlights.length ? ` Hallazgos: ${highlights.join(', ')}.` : ' Sin hallazgos relevantes.'
 
     return `${prefix}${middle}`
-  }
-
-  async deleteTenant(id: string) {
-    const tenant = await this.prisma.tenant.findUnique({ where: { id } })
-    if (!tenant) throw new NotFoundException('Empresa no encontrada.')
-
-    // Eliminar tenant (Prisma se encargará de las relaciones Cascade)
-    await this.prisma.tenant.delete({ where: { id } })
-
-    return { ok: true, message: 'Empresa eliminada correctamente.' }
   }
 }
