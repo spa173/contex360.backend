@@ -220,18 +220,49 @@ export class AdminService {
   }
 
   async getSystemStats() {
-    const [tenants, users, invoices, movements] = await Promise.all([
+    const [tenants, users, invoices, movements, demoRequests, subscriptions] = await Promise.all([
       this.prisma.tenant.count(),
       this.prisma.user.count(),
       this.prisma.invoice.count(),
       this.prisma.inventoryMovement.count(),
+      this.prisma.demoRequest.count(),
+      this.prisma.subscription.count(),
     ])
+
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+
+    const [demoRequestsToday, demoRequestsConverted] = await Promise.all([
+      this.prisma.demoRequest.count({
+        where: {
+          createdAt: { gte: today },
+        },
+      }),
+      this.prisma.demoRequest.count({
+        where: {
+          estado: 'convertido',
+        },
+      }),
+    ])
+
+    const activeTrials = await this.prisma.subscription.count({
+      where: {
+        planType: 'trial',
+        active: true,
+        trialEndsAt: { gte: new Date() },
+      },
+    })
 
     return {
       totalTenants: tenants,
       totalUsers: users,
       totalInvoices: invoices,
       totalMovements: movements,
+      totalDemoRequests: demoRequests,
+      demoRequestsToday,
+      demoRequestsConverted,
+      totalSubscriptions: subscriptions,
+      activeTrials,
       systemStatus: 'healthy',
       version: '1.0.0-enterprise',
     }
