@@ -67,6 +67,27 @@ export class AdminController {
     return this.adminService.notifyBreach(id)
   }
 
+  @Get('tenants/:id')
+  getTenantDetails(@Param('id') id: string) {
+    return this.adminService.getTenantDetails(id)
+  }
+
+  @Patch('tenants/:id')
+  updateTenant(
+    @Param('id') id: string,
+    @Body() body: { name?: string; sector?: string; city?: string; costMethod?: string; allowNegativeStock?: boolean },
+  ) {
+    return this.adminService.updateTenant(id, body)
+  }
+
+  @Patch('tenants/:id/subscription')
+  updateSubscription(
+    @Param('id') id: string,
+    @Body() body: { planType?: string; active?: boolean; trialEndsAt?: string | null },
+  ) {
+    return this.adminService.updateSubscription(id, body)
+  }
+
   @Post('companies')
   createCompany(@Body() body: {
     name: string

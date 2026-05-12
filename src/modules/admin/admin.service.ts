@@ -269,6 +269,80 @@ export class AdminService {
     }
   }
 
+  async getTenantDetails(id: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id },
+      include: {
+        subscription: true,
+        memberships: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+                status: true,
+                createdAt: true,
+                title: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: {
+            invoices: true,
+            products: true,
+            ledgerEntries: true,
+            ocrRuns: true,
+            auditEvents: true,
+          },
+        },
+      },
+    })
+    if (!tenant) throw new NotFoundException('Empresa no encontrada.')
+    return tenant
+  }
+
+  async updateTenant(id: string, data: {
+    name?: string
+    sector?: string
+    city?: string
+    costMethod?: string
+    allowNegativeStock?: boolean
+  }) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id } })
+    if (!tenant) throw new NotFoundException('Empresa no encontrada.')
+    return this.prisma.tenant.update({ where: { id }, data })
+  }
+
+  async updateSubscription(tenantId: string, data: {
+    planType?: string
+    active?: boolean
+    trialEndsAt?: string | null
+  }) {
+    const sub = await this.prisma.subscription.findUnique({ where: { tenantId } })
+    if (!sub) {
+      return this.prisma.subscription.create({
+        data: {
+          tenantId,
+          planType: data.planType || 'trial',
+          active: data.active ?? true,
+          trialEndsAt: data.trialEndsAt ? new Date(data.trialEndsAt) : null,
+        },
+      })
+    }
+    return this.prisma.subscription.update({
+      where: { tenantId },
+      data: {
+        planType: data.planType ?? sub.planType,
+        active: data.active ?? sub.active,
+        trialEndsAt: data.trialEndsAt !== undefined
+          ? (data.trialEndsAt ? new Date(data.trialEndsAt) : null)
+          : sub.trialEndsAt,
+      },
+    })
+  }
+
   async updateTenantStatus(id: string, status: 'active' | 'suspended') {
     const tenant = await this.prisma.tenant.findUnique({ where: { id } })
     if (!tenant) throw new NotFoundException('Empresa no encontrada.')
