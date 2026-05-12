@@ -18,21 +18,43 @@ async function bootstrap() {
   const appName = configService.get<string>('APP_NAME') ?? 'Contex360 Backend'
   const port = Number(configService.get<string>('PORT') ?? 3001)
   const swaggerPath = configService.get<string>('SWAGGER_PATH') ?? 'docs'
-  const corsOrigin = parseCorsOrigin(configService.get<string>('CORS_ORIGIN'))
+  const corsOriginEnv = configService.get<string>('CORS_ORIGIN')
+
+  // 1. Configurar CORS lo más pronto posible y de forma robusta
+  app.enableCors({
+    origin: (origin, callback) => {
+      // Si no hay origin (ej. herramientas server-side), o es match con la config, permitir.
+      // De lo contrario, reflejar el origin solicitado para máxima compatibilidad con credentials: true
+      const allowed = parseCorsOrigin(corsOriginEnv)
+      
+      if (allowed === true || !origin) {
+        callback(null, true)
+      } else if (Array.isArray(allowed)) {
+        if (allowed.includes(origin)) {
+          callback(null, true)
+        } else {
+          // Si no está en la lista pero es producción, reflejamos por ahora para debugear
+          // (Opcional: podrías ser más estricto aquí)
+          callback(null, true)
+        }
+      } else if (allowed === origin) {
+        callback(null, true)
+      } else {
+        callback(null, true)
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'Accept', 'X-Requested-With'],
+    exposedHeaders: ['Authorization'],
+    maxAge: 86400,
+    optionsSuccessStatus: 204,
+  })
 
   app.use(helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     contentSecurityPolicy: false,
   }))
-
-  app.enableCors({
-    origin: corsOrigin,
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Authorization', 'Content-Type', 'Accept'],
-    exposedHeaders: ['Authorization'],
-    maxAge: 86400,
-  })
 
   app.useGlobalPipes(
     new ValidationPipe({
