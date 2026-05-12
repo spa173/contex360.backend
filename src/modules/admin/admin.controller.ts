@@ -107,4 +107,9 @@ export class AdminController {
   ) {
     return this.adminService.updateTenantStatus(id, body.status)
   }
+
+  @Delete('tenants/:id')
+  deleteTenant(@Param('id') id: string) {
+    return this.adminService.deleteTenant(id)
+  }
 }

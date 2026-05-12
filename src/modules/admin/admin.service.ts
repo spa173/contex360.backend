@@ -891,4 +891,14 @@ export class AdminService {
 
     return `${prefix}${middle}`
   }
+
+  async deleteTenant(id: string) {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id } })
+    if (!tenant) throw new NotFoundException('Empresa no encontrada.')
+
+    // Eliminar tenant (Prisma se encargará de las relaciones Cascade)
+    await this.prisma.tenant.delete({ where: { id } })
+
+    return { ok: true, message: 'Empresa eliminada correctamente.' }
+  }
 }
