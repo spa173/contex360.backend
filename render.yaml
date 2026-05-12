@@ -16,4 +16,4 @@ services:
       - key: APP_NAME
         value: Contex360 Backend
       - key: CORS_ORIGIN
-        value: '*'
+        value: http://localhost:5173,https://contex360fronted.vercel.app
