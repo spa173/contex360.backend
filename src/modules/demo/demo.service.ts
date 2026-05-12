@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
+import { TelegramService } from '../telegram/telegram.service';
 
 @Injectable()
 export class DemoService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly telegramService: TelegramService,
+  ) {}
 
   async createDemoRequest(data: {
     nombre: string;
@@ -21,6 +25,11 @@ export class DemoService {
         mensaje: data.mensaje,
         estado: 'nuevo',
       },
+    });
+
+    // Send Telegram notification
+    await this.telegramService.sendDemoNotification(data).catch((err) => {
+      console.error('Failed to send Telegram notification:', err);
     });
 
     return {

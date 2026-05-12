@@ -17,6 +17,7 @@ import { AiModule } from './modules/ai/ai.module'
 import { AdminModule } from './modules/admin/admin.module'
 import { NotificationModule } from './modules/notification/notification.module'
 import { DemoModule } from './modules/demo/demo.module'
+import { TelegramModule } from './modules/telegram/telegram.module'
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { DemoModule } from './modules/demo/demo.module'
     AdminModule,
     NotificationModule,
     DemoModule,
+    TelegramModule,
   ],
   controllers: [AppController],
   providers: [
