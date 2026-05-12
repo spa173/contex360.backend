@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler'
 import { APP_GUARD } from '@nestjs/core'
+import { ScheduleModule } from '@nestjs/schedule'
 import { AppController } from './app.controller'
 import { AppService } from './app.service'
 import { AuthModule } from './modules/auth/auth.module'
@@ -14,6 +15,7 @@ import { InventoryModule } from './modules/inventory/inventory.module'
 import { AnalyticsModule } from './modules/analytics/analytics.module'
 import { AiModule } from './modules/ai/ai.module'
 import { AdminModule } from './modules/admin/admin.module'
+import { NotificationModule } from './modules/notification/notification.module'
 
 @Module({
   imports: [
@@ -26,6 +28,7 @@ import { AdminModule } from './modules/admin/admin.module'
       { name: 'short', ttl: 60000, limit: 10 },
       { name: 'long', ttl: 3600000, limit: 100 },
     ]),
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     HealthModule,
@@ -36,6 +39,7 @@ import { AdminModule } from './modules/admin/admin.module'
     AnalyticsModule,
     AiModule,
     AdminModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [

@@ -25,6 +25,23 @@ export interface TotpRequiredResponse {
   message: string
 }
 
+export interface PasswordExpiredResponse {
+  ok: false
+  requiresPasswordChange: true
+  message: string
+}
+
+export class ChangePasswordDto {
+  @Transform(({ value }) => String(value || '').trim())
+  @IsString()
+  currentPassword!: string
+
+  @Transform(({ value }) => String(value || '').trim())
+  @IsString()
+  @MinLength(8, { message: 'La nueva contrasena debe tener al menos 8 caracteres.' })
+  newPassword!: string
+}
+
 export interface AuthRequestContext {
   ip: string
   userAgent: string

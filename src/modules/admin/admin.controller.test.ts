@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing'
+import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { AdminController } from './admin.controller'
 import { AdminService } from './admin.service'
 
@@ -14,7 +15,9 @@ describe('AdminController', () => {
     getAllTenants: vi.fn().mockResolvedValue([{ id: 'tenant-1' }]),
     getAllUsers: vi.fn().mockResolvedValue([{ id: 'user-1' }]),
     getSystemStats: vi.fn().mockResolvedValue({ totalUsers: 10 }),
-    getGlobalAuditLogs: vi.fn().mockResolvedValue([{ action: 'test' }])
+    getGlobalAuditLogs: vi.fn().mockResolvedValue([{ action: 'test' }]),
+    getComplianceDashboard: vi.fn().mockResolvedValue({ accessReview: { totals: { totalUsers: 1 } } }),
+    runAccessReview: vi.fn().mockResolvedValue({ accessReview: { totals: { totalUsers: 1 } } }),
   }
 
   beforeEach(async () => {
@@ -61,5 +64,21 @@ describe('AdminController', () => {
     const res = await controller.getAuditLogs()
     expect(res).toEqual([{ action: 'test' }])
     expect(service.getGlobalAuditLogs).toHaveBeenCalled()
+  })
+
+  it('should call getCompliance', async () => {
+    const res = await controller.getCompliance()
+    expect(res).toEqual({ accessReview: { totals: { totalUsers: 1 } } })
+    expect(service.getComplianceDashboard).toHaveBeenCalled()
+  })
+
+  it('should run access review with the current user', async () => {
+    const res = await controller.runAccessReview({
+      authUser: { sub: 'user-1', sessionId: 'session-1', tenantId: 'tenant-1', email: 'admin@contex360.local', isSystemOwner: true },
+      headers: {},
+    } as any)
+
+    expect(res).toEqual({ accessReview: { totals: { totalUsers: 1 } } })
+    expect(service.runAccessReview).toHaveBeenCalledWith('manual', 'user-1')
   })
 })

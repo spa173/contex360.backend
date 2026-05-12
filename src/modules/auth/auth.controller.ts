@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, Param, Post, Query, Req, Re
 import type { CookieOptions, Response } from 'express'
 import { AUTH_COOKIE_NAME, isOAuthProvider } from './auth.constants'
 import { AuthGuard } from './auth.guard'
-import { AuthenticatedRequest, LoginRequestDto, RefreshTokenDto } from './auth.types'
+import { AuthenticatedRequest, ChangePasswordDto, LoginRequestDto, RefreshTokenDto } from './auth.types'
 import { AuthService } from './auth.service'
 import { TotpService } from './totp.service'
 import { getDefaultFrontendCallbackUrl } from './oauth.providers'
@@ -226,6 +226,13 @@ export class AuthController {
     if (!request.authUser) throw new UnauthorizedException('Token de acceso requerido.')
     await this.totpService.disableTotp(request.authUser.sub, body.code)
     return { ok: true, message: '2FA desactivado.' }
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('change-password')
+  async changePassword(@Req() request: AuthenticatedRequest, @Body() body: ChangePasswordDto) {
+    if (!request.authUser) throw new UnauthorizedException('Token de acceso requerido.')
+    return this.authService.changePassword(request.authUser.sub, body)
   }
 
   @Post('logout')

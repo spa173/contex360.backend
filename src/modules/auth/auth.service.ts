@@ -1,7 +1,7 @@
 import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
 import { Prisma, User, UserSession, UserStatus } from '@prisma/client'
-import { compare } from 'bcryptjs'
+import { compare, hash } from 'bcryptjs'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import {
   AuthRequestContext,
@@ -15,6 +15,8 @@ import {
   PublicUserSnapshot,
   RefreshTokenDto,
   TotpRequiredResponse,
+  PasswordExpiredResponse,
+  ChangePasswordDto,
 } from './auth.types'
 import { ROLE_DEFINITIONS } from './rbac.constants'
 import { TotpService } from './totp.service'
@@ -78,7 +80,7 @@ export class AuthService {
     private readonly totpService: TotpService,
   ) {}
 
-  async login(credentials: LoginRequestDto, context: AuthRequestContext): Promise<AuthResponseSnapshot | TotpRequiredResponse> {
+  async login(credentials: LoginRequestDto, context: AuthRequestContext): Promise<AuthResponseSnapshot | TotpRequiredResponse | PasswordExpiredResponse> {
     const email = normalizeEmail(credentials.email)
     const password = String(credentials.password || '')
 
@@ -122,6 +124,11 @@ export class AuthService {
       if (!isValid) {
         throw new UnauthorizedException('Codigo 2FA invalido. Intenta de nuevo.')
       }
+    }
+
+    const passwordExpired = this.isPasswordExpired(user.securityProfile)
+    if (passwordExpired) {
+      return { ok: false, requiresPasswordChange: true, message: 'Tu contrasena ha expirado. Debes establecer una nueva para continuar.' }
     }
 
     return this.issueAuthResponse(user, context)
@@ -538,6 +545,44 @@ export class AuthService {
       costMethod: tenant.costMethod || null,
       dianStatus: tenant.dianStatus || null,
     }
+  }
+
+  private isPasswordExpired(securityProfile: { passwordExpiryDays?: number | null; passwordUpdatedAt?: Date | null } | null | undefined): boolean {
+    if (!securityProfile) return false
+    const expiryDays = securityProfile.passwordExpiryDays ?? 90
+    if (expiryDays <= 0) return false
+    const updatedAt = securityProfile.passwordUpdatedAt
+    if (!updatedAt) return false
+    const expiresAt = new Date(new Date(updatedAt).getTime() + expiryDays * 24 * 60 * 60 * 1000)
+    return new Date() > expiresAt
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto): Promise<{ ok: boolean; message: string }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { securityProfile: true },
+    })
+    if (!user) throw new UnauthorizedException('Usuario no encontrado.')
+
+    const matches = user.passwordHash ? await compare(dto.currentPassword, user.passwordHash) : false
+    if (!matches) throw new UnauthorizedException('La contrasena actual es incorrecta.')
+
+    const newHash = await hash(dto.newPassword, 12)
+    await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: userId }, data: { passwordHash: newHash } }),
+      this.prisma.userSecurityProfile.upsert({
+        where: { userId },
+        create: {
+          userId,
+          passwordUpdatedAt: new Date(),
+          passwordHistory: [],
+          trustedFingerprints: [],
+        },
+        update: { passwordUpdatedAt: new Date() },
+      }),
+    ])
+
+    return { ok: true, message: 'Contrasena actualizada correctamente.' }
   }
 
   private mapSessionSnapshot(session: UserSession): PublicSessionSnapshot {

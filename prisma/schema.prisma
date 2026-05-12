@@ -43,6 +43,7 @@ enum AuditSeverity {
   info
   warning
   error
+  critical
 }
 
 model User {
@@ -282,8 +283,9 @@ model UserSecurityProfile {
   twoFactorEnabled      Boolean  @default(false)
   twoFactorRequired     Boolean  @default(false)
   totpSecret            String?
-  passwordResetRequired Boolean  @default(false)
-  passwordUpdatedAt     DateTime?
+  passwordResetRequired  Boolean  @default(false)
+  passwordExpiryDays     Int?     @default(90)
+  passwordUpdatedAt      DateTime?
   resetRequestedAt      DateTime?
   tempPasswordExpiresAt DateTime?
   riskLevel             String   @default("low")
