@@ -1,4 +1,4 @@
-import { Controller, Delete, Get, NotFoundException, Param, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common'
 import { AuthGuard } from '../auth/auth.guard'
 import { AdminGuard } from '../auth/admin.guard'
 import { AuthenticatedRequest } from '../auth/auth.types'
@@ -65,5 +65,24 @@ export class AdminController {
   @Post('breach-alerts/:id/notify')
   notifyBreach(@Param('id') id: string) {
     return this.adminService.notifyBreach(id)
+  }
+
+  @Post('companies')
+  createCompany(@Body() body: {
+    name: string
+    adminName: string
+    adminEmail: string
+    plan?: string
+    city?: string
+  }) {
+    return this.adminService.createCompany(body)
+  }
+
+  @Patch('tenants/:id/status')
+  updateTenantStatus(
+    @Param('id') id: string,
+    @Body() body: { status: 'active' | 'suspended' },
+  ) {
+    return this.adminService.updateTenantStatus(id, body.status)
   }
 }

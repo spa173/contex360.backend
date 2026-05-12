@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common'
+import { Injectable, NotFoundException } from '@nestjs/common'
 import { AuditSeverity, Prisma, UserStatus } from '@prisma/client'
-import { createHash } from 'crypto'
+import { createHash, randomBytes } from 'crypto'
+import { hashSync } from 'bcryptjs'
 import { PrismaService } from '../database/prisma.service'
 import { NotificationService } from '../notification/notification.service'
 
@@ -266,6 +267,75 @@ export class AdminService {
       systemStatus: 'healthy',
       version: '1.0.0-enterprise',
     }
+  }
+
+  async updateTenantStatus(id: string, status: 'active' | 'suspended') {
+    const tenant = await this.prisma.tenant.findUnique({ where: { id } })
+    if (!tenant) throw new NotFoundException('Empresa no encontrada.')
+    return this.prisma.tenant.update({
+      where: { id },
+      data: { dianStatus: status },
+    })
+  }
+
+  async createCompany(data: {
+    name: string
+    adminName: string
+    adminEmail: string
+    plan?: string
+    phone?: string
+    city?: string
+  }) {
+    const tempPassword = randomBytes(6).toString('base64').slice(0, 10) + 'A1!'
+    const passwordHash = hashSync(tempPassword, 10)
+
+    const prefix = data.name.slice(0, 3).toUpperCase()
+
+    const tenant = await this.prisma.tenant.create({
+      data: {
+        name: data.name,
+        prefix,
+        city: data.city || null,
+        securitySettings: {},
+      },
+    })
+
+    const user = await this.prisma.user.create({
+      data: {
+        name: data.adminName,
+        email: data.adminEmail,
+        title: 'Administrador',
+        passwordHash,
+        passwordSalt: 'bcryptjs',
+        status: 'active',
+      },
+    })
+
+    await this.prisma.membership.create({
+      data: { userId: user.id, tenantId: tenant.id, role: 'Administrador' },
+    })
+
+    await this.prisma.userSecurityProfile.create({
+      data: {
+        userId: user.id,
+        passwordResetRequired: true,
+        passwordHistory: [],
+        trustedFingerprints: [],
+      },
+    })
+
+    if (data.plan) {
+      await this.prisma.subscription.create({
+        data: {
+          tenantId: tenant.id,
+          planType: data.plan,
+          active: true,
+          trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        },
+      })
+    }
+
+    return { tenant, user, tempPassword }
   }
 
   async getComplianceDashboard(): Promise<ComplianceDashboard> {
