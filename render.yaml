@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: contex360-backend
+    runtime: node
+    region: ohio
+    branch: master
+    buildCommand: npm install && npx prisma generate
+    startCommand: npx ts-node src/main.ts
+    envVars:
+      - key: DATABASE_URL
+        value: postgresql://neondb_owner:npg_qDvmbekCY24j@ep-broad-term-apvb1mjn-pooler.c-7.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require&pgbouncer=true
+      - key: DIRECT_URL
+        value: postgresql://neondb_owner:npg_qDvmbekCY24j@ep-broad-term-apvb1mjn.c-7.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+      - key: JWT_SECRET
+        value: contex360-jwt-secret-key-2024
+      - key: APP_NAME
+        value: Contex360 Backend
+      - key: CORS_ORIGIN
+        value: '*'
