@@ -1,6 +1,6 @@
 import { UserStatus } from '@prisma/client'
 import { Transform } from 'class-transformer'
-import { IsEmail, IsString, MinLength } from 'class-validator'
+import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator'
 import { OAuthProvider } from './auth.constants'
 
 export class LoginRequestDto {
@@ -12,6 +12,17 @@ export class LoginRequestDto {
   @IsString({ message: 'La contrasena debe ser un texto.' })
   @MinLength(1, { message: 'La contrasena es requerida.' })
   password!: string
+
+  @IsOptional()
+  @Transform(({ value }) => String(value || '').trim())
+  @IsString()
+  totpCode?: string
+}
+
+export interface TotpRequiredResponse {
+  ok: false
+  requiresTotp: true
+  message: string
 }
 
 export interface AuthRequestContext {

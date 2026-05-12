@@ -115,7 +115,7 @@ export class AuthController {
     @Res({ passthrough: true }) response?: Response,
   ) {
     const result = await this.authService.login(body, resolveRequestContext(request))
-    if (response) {
+    if (response && 'accessToken' in result) {
       setAuthCookie(response, result.accessToken)
     }
     return result

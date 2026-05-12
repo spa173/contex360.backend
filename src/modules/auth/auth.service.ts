@@ -14,8 +14,10 @@ import {
   PublicTenantSnapshot,
   PublicUserSnapshot,
   RefreshTokenDto,
+  TotpRequiredResponse,
 } from './auth.types'
 import { ROLE_DEFINITIONS } from './rbac.constants'
+import { TotpService } from './totp.service'
 import { PrismaService } from '../database/prisma.service'
 import { OAuthProvider } from './auth.constants'
 import {
@@ -73,9 +75,10 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
+    private readonly totpService: TotpService,
   ) {}
 
-  async login(credentials: LoginRequestDto, context: AuthRequestContext): Promise<AuthResponseSnapshot> {
+  async login(credentials: LoginRequestDto, context: AuthRequestContext): Promise<AuthResponseSnapshot | TotpRequiredResponse> {
     const email = normalizeEmail(credentials.email)
     const password = String(credentials.password || '')
 
@@ -109,6 +112,16 @@ export class AuthService {
 
     if (!user.memberships.length) {
       throw new ForbiddenException('El usuario no tiene empresas asignadas.')
+    }
+
+    if (user.securityProfile?.twoFactorEnabled) {
+      if (!credentials.totpCode) {
+        return { ok: false, requiresTotp: true, message: 'Se requiere el codigo de autenticacion de dos factores.' }
+      }
+      const isValid = await this.totpService.verifyTotp(user.id, credentials.totpCode)
+      if (!isValid) {
+        throw new UnauthorizedException('Codigo 2FA invalido. Intenta de nuevo.')
+      }
     }
 
     return this.issueAuthResponse(user, context)
