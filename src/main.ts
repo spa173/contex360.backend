@@ -11,19 +11,22 @@ const logger = new Logger('Bootstrap')
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
+  const configService = app.get(ConfigService)
   
-  // Habilitar CORS de la forma más sencilla y estándar de NestJS
+  // Configuración de CORS más robusta para producción
+  const corsOrigin = configService.get<string>('CORS_ORIGIN')
+  const allowedOrigins = corsOrigin ? corsOrigin.split(',') : true
+
   app.enableCors({
-    origin: true, // Refleja el origin de la petición
+    origin: allowedOrigins,
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type,Accept,Authorization,X-Requested-With',
     exposedHeaders: 'Authorization',
     preflightContinue: false,
-    optionsSuccessStatus: 200,
+    optionsSuccessStatus: 204,
   })
 
-  const configService = app.get(ConfigService)
   const appName = configService.get<string>('APP_NAME') ?? 'Contex360 Backend'
   const port = Number(configService.get<string>('PORT') ?? 3001)
   const swaggerPath = configService.get<string>('SWAGGER_PATH') ?? 'docs'
@@ -52,6 +55,7 @@ async function bootstrap() {
 
   const url = await app.getUrl()
   logger.log(`${appName} running at ${url}`)
+  logger.log(`CORS origins: ${allowedOrigins === true ? 'All (Reflect)' : allowedOrigins}`)
 }
 
 bootstrap().catch((error: unknown) => {

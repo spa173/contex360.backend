@@ -4,8 +4,8 @@ services:
     runtime: node
     region: ohio
     branch: master
-    buildCommand: npm install && npx prisma generate
-    startCommand: npx ts-node src/main.ts
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npm run start
     envVars:
       - key: DATABASE_URL
         value: postgresql://neondb_owner:npg_qDvmbekCY24j@ep-broad-term-apvb1mjn-pooler.c-7.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require&pgbouncer=true
