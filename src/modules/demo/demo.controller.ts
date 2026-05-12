@@ -25,4 +25,9 @@ export class DemoController {
   async updateStatus(@Param('id') id: string, @Body('estado') estado: string) {
     return this.demoService.updateDemoRequestStatus(id, estado);
   }
+
+  @Post(':id/convert')
+  async convertToCustomer(@Param('id') id: string) {
+    return this.demoService.convertToCustomer(id);
+  }
 }

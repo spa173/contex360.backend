@@ -50,7 +50,10 @@ enum DemoRequestStatus {
   nuevo
   contactado
   demo_agendada
+  aprobado
+  convertido
   cliente
+  rechazado
 }
 
 model User {
