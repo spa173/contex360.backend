@@ -46,6 +46,13 @@ enum AuditSeverity {
   critical
 }
 
+enum DemoRequestStatus {
+  nuevo
+  contactado
+  demo_agendada
+  cliente
+}
+
 model User {
   id                String                @id @default(cuid())
   name              String
@@ -378,5 +385,19 @@ model RoleAccessHistory {
 
   @@index([tenantId, at])
   @@index([role, moduleId, permission])
+}
+
+model DemoRequest {
+  id        String            @id @default(cuid())
+  nombre    String
+  empresa   String
+  correo    String
+  telefono  String?
+  mensaje   String?
+  estado    DemoRequestStatus @default(nuevo)
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@index([estado, createdAt])
 }
 

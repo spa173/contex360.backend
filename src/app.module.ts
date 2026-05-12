@@ -16,6 +16,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module'
 import { AiModule } from './modules/ai/ai.module'
 import { AdminModule } from './modules/admin/admin.module'
 import { NotificationModule } from './modules/notification/notification.module'
+import { DemoModule } from './modules/demo/demo.module'
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { NotificationModule } from './modules/notification/notification.module'
     AiModule,
     AdminModule,
     NotificationModule,
+    DemoModule,
   ],
   controllers: [AppController],
   providers: [
