@@ -352,11 +352,20 @@ export class AdminService {
     })
   }
 
-  async deleteTenant(id: string) {
+  async deleteTenant(id: string, actorUserId: string, password?: string) {
+    if (!password) throw new UnauthorizedException('Se requiere la contraseña para confirmar esta acción.')
+    
+    const actorUser = await this.prisma.user.findUnique({ where: { id: actorUserId } })
+    if (!actorUser) throw new NotFoundException('Usuario administrador no encontrado.')
+    
+    // Verificar contraseña usando bcryptjs (asumiendo que compareSync está disponible o se añade)
+    const { compareSync } = require('bcryptjs')
+    const isValid = compareSync(password, actorUser.passwordHash)
+    if (!isValid) throw new UnauthorizedException('La contraseña proporcionada es incorrecta.')
+
     const tenant = await this.prisma.tenant.findUnique({ where: { id } })
     if (!tenant) throw new NotFoundException('Empresa no encontrada.')
     
-    // Al eliminar el tenant, Prisma cascade borrará membresías, productos, facturas, etc.
     return this.prisma.tenant.delete({ where: { id } })
   }
 

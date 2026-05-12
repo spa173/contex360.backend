@@ -109,7 +109,14 @@ export class AdminController {
   }
 
   @Delete('tenants/:id')
-  deleteTenant(@Param('id') id: string) {
-    return this.adminService.deleteTenant(id)
+  deleteTenant(
+    @Param('id') id: string,
+    @Body() body: { password?: string },
+    @Req() request: AuthenticatedRequest
+  ) {
+    if (!request.authUser) {
+      throw new UnauthorizedException('Token de acceso requerido.')
+    }
+    return this.adminService.deleteTenant(id, request.authUser.sub, body.password)
   }
 }
