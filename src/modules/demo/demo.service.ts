@@ -123,12 +123,36 @@ export class DemoService {
         },
       });
 
+      // Create security profile with password reset required
+      await tx.userSecurityProfile.create({
+        data: {
+          userId: user.id,
+          passwordResetRequired: true,
+          riskLevel: 'low',
+          passwordHistory: [],
+          trustedFingerprints: [],
+        },
+      });
+
       // Create membership
       await tx.membership.create({
         data: {
           userId: user.id,
           tenantId: tenant.id,
           role: 'owner',
+        },
+      });
+
+      // Create subscription with 14-day trial
+      const trialEndsAt = new Date();
+      trialEndsAt.setDate(trialEndsAt.getDate() + 14);
+
+      await tx.subscription.create({
+        data: {
+          tenantId: tenant.id,
+          planType: 'trial',
+          active: true,
+          trialEndsAt,
         },
       });
 

@@ -103,6 +103,7 @@ model Tenant {
   userSessions      UserSession[]
   auditEvents       AuditEvent[]
   roleAccessHistory RoleAccessHistory[]
+  subscription      Subscription?
 }
 
 model Membership {
@@ -402,5 +403,17 @@ model DemoRequest {
   updatedAt DateTime          @updatedAt
 
   @@index([estado, createdAt])
+}
+
+model Subscription {
+  id           String   @id @default(cuid())
+  tenantId     String
+  planType     String
+  active       Boolean  @default(true)
+  trialEndsAt  DateTime?
+
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId])
 }
 
