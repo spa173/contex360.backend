@@ -1,6 +1,7 @@
 import 'reflect-metadata'
 
 import { Logger, ValidationPipe } from '@nestjs/common'
+import helmet from 'helmet'
 import { ConfigService } from '@nestjs/config'
 import { NestFactory } from '@nestjs/core'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
@@ -18,6 +19,11 @@ async function bootstrap() {
   const port = Number(configService.get<string>('PORT') ?? 3001)
   const swaggerPath = configService.get<string>('SWAGGER_PATH') ?? 'docs'
   const corsOrigin = parseCorsOrigin(configService.get<string>('CORS_ORIGIN'))
+
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    contentSecurityPolicy: false,
+  }))
 
   app.enableCors({
     origin: true,
