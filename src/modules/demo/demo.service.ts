@@ -200,6 +200,17 @@ export class DemoService {
       console.error('Failed to send Telegram notification:', err);
     });
 
+    // Send Welcome Email with credentials to the final user
+    await this.notificationService.sendWelcomeCredentialsEmail({
+      email: result.user.email,
+      name: result.user.name,
+      tempPassword: result.tempPassword,
+      companyName: result.tenant.name,
+      prefix: result.tenant.prefix,
+    }).catch((err) => {
+      console.error('Failed to send Welcome Email:', err);
+    });
+
     return {
       ok: true,
       message: 'Cliente creado exitosamente',
