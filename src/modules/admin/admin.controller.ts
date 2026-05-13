@@ -96,6 +96,10 @@ export class AdminController {
     prefix?: string
     plan?: string
     city?: string
+    nit?: string
+    address?: string
+    phone?: string
+    sector?: string
   }) {
     return this.adminService.createCompany(body)
   }

@@ -28,7 +28,6 @@ async function main() {
     console.error('ERROR: Seed script cannot be run in production environment.')
     return
   }
-  const adminPasswordHash = hashSync(seedPassword('admin@contex360.local'), 10)
   const accountantPasswordHash = hashSync(seedPassword('contador@contex360.local'), 10)
   const visorPasswordHash = hashSync(seedPassword('visor@contex360.local'), 10)
   const retailAdminPasswordHash = hashSync(seedPassword('retail.admin@contex360.local'), 10)
@@ -64,29 +63,6 @@ async function main() {
     },
   })
 
-  const adminUser = await prisma.user.upsert({
-    where: { email: 'admin@contex360.local' },
-    update: {
-      name: 'Camilo Demo',
-      title: 'Administrador local',
-      status: UserStatus.active,
-      isDemoAccount: true,
-      isSystemOwner: true,
-      passwordHash: adminPasswordHash,
-      passwordSalt: 'bcryptjs',
-    },
-    create: {
-      id: 'user-demo',
-      name: 'Camilo Demo',
-      email: 'admin@contex360.local',
-      title: 'Administrador local',
-      status: UserStatus.active,
-      isDemoAccount: true,
-      isSystemOwner: true,
-      passwordHash: adminPasswordHash,
-      passwordSalt: 'bcryptjs',
-    },
-  })
 
   const accountantUser = await prisma.user.upsert({
     where: { email: 'contador@contex360.local' },
@@ -176,39 +152,6 @@ async function main() {
     },
   })
 
-  await prisma.membership.upsert({
-    where: {
-      userId_tenantId: {
-        userId: adminUser.id,
-        tenantId: tenantA.id,
-      },
-    },
-    update: {
-      role: 'Administrador',
-    },
-    create: {
-      userId: adminUser.id,
-      tenantId: tenantA.id,
-      role: 'Administrador',
-    },
-  })
-
-  await prisma.membership.upsert({
-    where: {
-      userId_tenantId: {
-        userId: adminUser.id,
-        tenantId: tenantB.id,
-      },
-    },
-    update: {
-      role: 'Gerencia',
-    },
-    create: {
-      userId: adminUser.id,
-      tenantId: tenantB.id,
-      role: 'Gerencia',
-    },
-  })
 
   await prisma.membership.upsert({
     where: {
@@ -278,32 +221,6 @@ async function main() {
     },
   })
 
-  await prisma.userSecurityProfile.upsert({
-    where: { userId: adminUser.id },
-    update: {
-      twoFactorEnabled: true,
-      twoFactorRequired: true,
-      passwordResetRequired: false,
-      passwordUpdatedAt: new Date('2026-04-20T09:00:00.000Z'),
-      riskLevel: 'low',
-      passwordHistory: [],
-      failedLoginAttempts: 0,
-      lockedUntil: null,
-      trustedFingerprints: [],
-    },
-    create: {
-      userId: adminUser.id,
-      twoFactorEnabled: true,
-      twoFactorRequired: true,
-      passwordResetRequired: false,
-      passwordUpdatedAt: new Date('2026-04-20T09:00:00.000Z'),
-      riskLevel: 'low',
-      passwordHistory: [],
-      failedLoginAttempts: 0,
-      lockedUntil: null,
-      trustedFingerprints: [],
-    },
-  })
 
   await prisma.userSecurityProfile.upsert({
     where: { userId: accountantUser.id },
@@ -566,8 +483,7 @@ async function main() {
     [
       'Seed completed.',
       `Tenants: ${tenantA.prefix}, ${tenantB.prefix}`,
-      `Users: ${adminUser.email}, ${accountantUser.email}, ${visorUser.email}, ${retailAdminUser.email}, ${payrollUser.email}`,
-      `Admin password: ${seedPassword(adminUser.email)}`,
+      `Users: ${accountantUser.email}, ${visorUser.email}, ${retailAdminUser.email}, ${payrollUser.email}`,
       `Accountant password: ${seedPassword(accountantUser.email)}`,
     ].join('\n') + '\n',
   )

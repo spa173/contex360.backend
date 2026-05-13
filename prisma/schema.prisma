@@ -84,6 +84,9 @@ model Tenant {
   id                String                @id @default(cuid())
   name              String
   prefix            String                @unique
+  nit               String?
+  address           String?
+  phone             String?
   allowNegativeStock Boolean               @default(false)
   sector            String?
   city              String?

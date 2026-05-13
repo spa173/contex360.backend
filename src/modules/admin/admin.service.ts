@@ -382,8 +382,11 @@ export class AdminService {
     adminEmail: string
     prefix?: string
     plan?: string
-    phone?: string
     city?: string
+    nit?: string
+    address?: string
+    phone?: string
+    sector?: string
   }) {
     const tempPassword = randomBytes(6).toString('base64').slice(0, 10) + 'A1!'
     const passwordHash = hashSync(tempPassword, 10)
@@ -395,6 +398,10 @@ export class AdminService {
         name: data.name,
         prefix,
         city: data.city || null,
+        nit: data.nit || null,
+        address: data.address || null,
+        phone: data.phone || null,
+        sector: data.sector || null,
         securitySettings: {},
       },
     })

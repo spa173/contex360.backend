@@ -42,6 +42,18 @@ export class ChangePasswordDto {
   newPassword!: string
 }
 
+export class UpdateProfileDto {
+  @IsOptional()
+  @Transform(({ value }) => String(value || '').trim())
+  @IsString()
+  name?: string
+
+  @IsOptional()
+  @Transform(({ value }) => String(value || '').trim())
+  @IsString()
+  title?: string
+}
+
 export interface AuthRequestContext {
   ip: string
   userAgent: string

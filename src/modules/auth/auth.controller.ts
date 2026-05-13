@@ -1,8 +1,8 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Query, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common'
 import type { CookieOptions, Response } from 'express'
 import { AUTH_COOKIE_NAME, isOAuthProvider } from './auth.constants'
 import { AuthGuard } from './auth.guard'
-import { AuthenticatedRequest, ChangePasswordDto, LoginRequestDto, RefreshTokenDto } from './auth.types'
+import { AuthenticatedRequest, ChangePasswordDto, LoginRequestDto, RefreshTokenDto, UpdateProfileDto } from './auth.types'
 import { AuthService } from './auth.service'
 import { TotpService } from './totp.service'
 import { getDefaultFrontendCallbackUrl } from './oauth.providers'
@@ -233,6 +233,13 @@ export class AuthController {
   async changePassword(@Req() request: AuthenticatedRequest, @Body() body: ChangePasswordDto) {
     if (!request.authUser) throw new UnauthorizedException('Token de acceso requerido.')
     return this.authService.changePassword(request.authUser.sub, body)
+  }
+
+  @UseGuards(AuthGuard)
+  @Patch('profile')
+  async updateProfile(@Req() request: AuthenticatedRequest, @Body() body: UpdateProfileDto) {
+    if (!request.authUser) throw new UnauthorizedException('Token de acceso requerido.')
+    return this.authService.updateProfile(request.authUser.sub, body)
   }
 
   @Post('logout')

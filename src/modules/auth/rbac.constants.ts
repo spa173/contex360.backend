@@ -35,7 +35,7 @@ export const ROLE_DEFINITIONS: RoleDefinition[] = [
       'view_accounting', 'manage_accounting',
       'run_ocr', 'manage_users'
     ],
-    views: ['dashboard', 'billing', 'inventory', 'accounting', 'third-parties', 'users', 'ai'],
+    views: ['dashboard', 'billing', 'inventory', 'accounting', 'third-parties', 'users', 'ai', 'profile'],
     access: {
       dashboard: ['view', 'export', 'configure'],
       billing: ['view', 'create', 'edit', 'approve', 'export', 'configure'],
@@ -56,7 +56,7 @@ export const ROLE_DEFINITIONS: RoleDefinition[] = [
       'view_accounting', 'manage_accounting',
       'run_ocr'
     ],
-    views: ['dashboard', 'billing', 'inventory', 'accounting', 'third-parties', 'ai'],
+    views: ['dashboard', 'billing', 'inventory', 'accounting', 'third-parties', 'ai', 'profile'],
     access: {
       dashboard: ['view', 'export'],
       billing: ['view', 'create', 'edit', 'export'],
@@ -76,7 +76,7 @@ export const ROLE_DEFINITIONS: RoleDefinition[] = [
       'view_third_parties', 'manage_third_parties',
       'run_ocr'
     ],
-    views: ['dashboard', 'billing', 'accounting', 'third-parties', 'ai'],
+    views: ['dashboard', 'billing', 'accounting', 'third-parties', 'ai', 'profile'],
     access: {
       dashboard: ['view'],
       billing: ['view', 'create'],
@@ -96,7 +96,7 @@ export const ROLE_DEFINITIONS: RoleDefinition[] = [
       'view_accounting', 'export_accounting',
       'view_third_parties'
     ],
-    views: ['dashboard', 'accounting'],
+    views: ['dashboard', 'accounting', 'profile'],
     access: {
       dashboard: ['view', 'export'],
       billing: ['view', 'export'],
@@ -116,7 +116,7 @@ export const ROLE_DEFINITIONS: RoleDefinition[] = [
       'view_accounting', 'export_accounting',
       'view_third_parties'
     ],
-    views: ['dashboard', 'billing', 'inventory', 'accounting', 'third-parties'],
+    views: ['dashboard', 'billing', 'inventory', 'accounting', 'third-parties', 'profile'],
     access: {
       dashboard: ['view', 'export'],
       billing: ['view', 'export'],

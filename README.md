@@ -51,7 +51,6 @@ npm run db:reset
 
 ### Datos semilla
 
-- `admin@contex360.local` / `admin@contex360.local!A1`
 - `contador@contex360.local` / `contador@contex360.local!A1`
 - `visor@contex360.local` / `visor@contex360.local!A1`
 - `retail.admin@contex360.local` / `retail.admin@contex360.local!A1`

@@ -17,6 +17,7 @@ import {
   TotpRequiredResponse,
   PasswordExpiredResponse,
   ChangePasswordDto,
+  UpdateProfileDto,
 } from './auth.types'
 import { ROLE_DEFINITIONS } from './rbac.constants'
 import { TotpService } from './totp.service'
@@ -583,6 +584,17 @@ export class AuthService {
     ])
 
     return { ok: true, message: 'Contrasena actualizada correctamente.' }
+  }
+
+  async updateProfile(userId: string, dto: UpdateProfileDto): Promise<PublicUserSnapshot> {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        name: dto.name,
+        title: dto.title,
+      },
+    })
+    return this.mapUserSnapshot(user)
   }
 
   private mapSessionSnapshot(session: UserSession): PublicSessionSnapshot {
