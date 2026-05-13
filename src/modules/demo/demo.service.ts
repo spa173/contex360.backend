@@ -1,6 +1,5 @@
 import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { TelegramService } from '../telegram/telegram.service';
 import { NotificationService } from '../notification/notification.service';
 import { hash } from 'bcryptjs';
 
@@ -8,7 +7,6 @@ import { hash } from 'bcryptjs';
 export class DemoService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly telegramService: TelegramService,
     private readonly notificationService: NotificationService,
   ) {}
 
@@ -36,11 +34,6 @@ export class DemoService {
         sector: data.sector,
         estado: 'nuevo',
       },
-    });
-
-    // Send Telegram notification
-    await this.telegramService.sendDemoNotification(data).catch((err) => {
-      console.error('Failed to send Telegram notification:', err);
     });
 
     // Send Email notification to System Owner
@@ -184,20 +177,6 @@ export class DemoService {
       });
 
       return { tenant, user, tempPassword };
-    });
-
-    // Send Telegram notification
-    await this.telegramService.sendMessage(`
-✅ <b>Nuevo cliente creado</b>
-
-🏢 Empresa: ${result.tenant.name}
-👤 Admin: ${result.user.name}
-📧 Correo: ${result.user.email}
-🔑 Contraseña: ${result.tempPassword}
-
-📅 Fecha: ${new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })}
-    `).catch((err) => {
-      console.error('Failed to send Telegram notification:', err);
     });
 
     // Send Welcome Email with credentials to the final user
