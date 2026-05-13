@@ -372,8 +372,30 @@ export class AdminService {
 
     const tenant = await this.prisma.tenant.findUnique({ where: { id } })
     if (!tenant) throw new NotFoundException('Empresa no encontrada.')
-    
-    return this.prisma.tenant.delete({ where: { id } })
+
+    // Find users that belong ONLY to this tenant (no other memberships)
+    const memberships = await this.prisma.membership.findMany({
+      where: { tenantId: id },
+      select: { userId: true },
+    })
+    const userIds = memberships.map((m) => m.userId)
+
+    const exclusiveUserIds: string[] = []
+    for (const userId of userIds) {
+      const otherMemberships = await this.prisma.membership.count({
+        where: { userId, tenantId: { not: id } },
+      })
+      if (otherMemberships === 0) exclusiveUserIds.push(userId)
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      if (exclusiveUserIds.length > 0) {
+        await tx.userSecurityProfile.deleteMany({ where: { userId: { in: exclusiveUserIds } } })
+        await tx.membership.deleteMany({ where: { tenantId: id } })
+        await tx.user.deleteMany({ where: { id: { in: exclusiveUserIds } } })
+      }
+      return tx.tenant.delete({ where: { id } })
+    })
   }
 
   async createCompany(data: {
