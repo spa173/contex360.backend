@@ -57,6 +57,59 @@ export class NotificationService {
     this.logger.log(`Alerta de brecha enviada a ${payload.adminEmails.length} administrador(es).`)
   }
 
+  async sendDemoRequestEmail(data: any, adminEmail: string): Promise<void> {
+    const subject = `[Contex360] Nueva solicitud de Demo: ${data.empresa}`
+    const html = this.buildDemoRequestHtml(data)
+
+    if (!this.transporter) {
+      this.logger.warn(`NUEVA DEMO (sin email): ${subject} | ${data.nombre} (${data.correo})`)
+      return
+    }
+
+    const from = this.config.get<string>('SMTP_FROM') ?? 'no-reply@contex360.com'
+
+    await this.transporter.sendMail({ from, to: adminEmail, subject, html }).catch((err) =>
+      this.logger.error(`Error enviando notificación de demo a ${adminEmail}: ${err.message}`),
+    )
+
+    this.logger.log(`Notificación de demo enviada a ${adminEmail}.`)
+  }
+
+  private buildDemoRequestHtml(data: any): string {
+    const date = new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })
+
+    return `
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8" /></head>
+<body style="font-family:sans-serif;background:#f8fafc;color:#1e293b;padding:32px;">
+  <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px;border:1px solid #e2e8f0;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);">
+    <h2 style="color:#10b981;margin-top:0;">🚀 Nueva Solicitud de Demo</h2>
+    <p style="color:#64748b;font-size:16px;margin-bottom:24px;">Se ha recibido una nueva solicitud de demostración a través del portal de Contex360.</p>
+    
+    <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
+      <tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:12px 0;color:#64748b;width:140px;">Empresa</td><td><strong>${data.empresa}</strong></td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:12px 0;color:#64748b;">NIT</td><td>${data.nit || 'No proporcionado'}</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:12px 0;color:#64748b;">Nombre</td><td>${data.nombre}</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:12px 0;color:#64748b;">Correo</td><td><a href="mailto:${data.correo}" style="color:#10b981;text-decoration:none;">${data.correo}</a></td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:12px 0;color:#64748b;">Teléfono</td><td>${data.telefono || 'No proporcionado'}</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:12px 0;color:#64748b;">Ubicación</td><td>${data.ciudad || ''} ${data.direccion || ''}</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9;"><td style="padding:12px 0;color:#64748b;">Sector</td><td>${data.sector || 'No especificado'}</td></tr>
+      <tr><td style="padding:12px 0;color:#64748b;">Mensaje</td><td style="padding:12px 0;line-height:1.5;">${data.mensaje || 'Sin mensaje'}</td></tr>
+    </table>
+
+    <div style="background:#f8fafc;border-radius:8px;padding:16px;font-size:14px;color:#64748b;text-align:center;">
+      Recibido el: ${date}
+    </div>
+    
+    <p style="margin-top:24px;text-align:center;">
+      <a href="https://contex360fronted.vercel.app" style="background:#10b981;color:#ffffff;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">Ver en Consola Admin</a>
+    </p>
+  </div>
+</body>
+</html>`
+  }
+
   private buildBreachAlertHtml(payload: BreachAlertPayload): string {
     const severityColor = payload.severity === 'critical' ? '#dc2626' : '#ea580c'
     const date = new Date(payload.occurredAt).toLocaleString('es-CO', { timeZone: 'America/Bogota' })

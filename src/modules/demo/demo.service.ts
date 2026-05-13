@@ -1,6 +1,7 @@
 import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { TelegramService } from '../telegram/telegram.service';
+import { NotificationService } from '../notification/notification.service';
 import { hash } from 'bcryptjs';
 
 @Injectable()
@@ -8,6 +9,7 @@ export class DemoService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly telegramService: TelegramService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async createDemoRequest(data: {
@@ -40,6 +42,17 @@ export class DemoService {
     await this.telegramService.sendDemoNotification(data).catch((err) => {
       console.error('Failed to send Telegram notification:', err);
     });
+
+    // Send Email notification to System Owner
+    const systemOwner = await this.prisma.user.findFirst({
+      where: { isSystemOwner: true },
+    });
+
+    if (systemOwner) {
+      await this.notificationService.sendDemoRequestEmail(data, systemOwner.email).catch((err) => {
+        console.error('Failed to send Email notification:', err);
+      });
+    }
 
     return {
       ok: true,
