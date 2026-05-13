@@ -12,6 +12,10 @@ export class DemoController {
     correo: string;
     telefono?: string;
     mensaje?: string;
+    nit?: string;
+    ciudad?: string;
+    direccion?: string;
+    sector?: string;
   }) {
     return this.demoService.createDemoRequest(body);
   }

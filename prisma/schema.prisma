@@ -401,6 +401,10 @@ model DemoRequest {
   correo    String
   telefono  String?
   mensaje   String?
+  nit       String?
+  ciudad    String?
+  direccion String?
+  sector    String?
   estado    DemoRequestStatus @default(nuevo)
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt

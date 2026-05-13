@@ -16,6 +16,10 @@ export class DemoService {
     correo: string;
     telefono?: string;
     mensaje?: string;
+    nit?: string;
+    ciudad?: string;
+    direccion?: string;
+    sector?: string;
   }) {
     const demoRequest = await this.prisma.demoRequest.create({
       data: {
@@ -24,6 +28,10 @@ export class DemoService {
         correo: data.correo,
         telefono: data.telefono,
         mensaje: data.mensaje,
+        nit: data.nit,
+        ciudad: data.ciudad,
+        direccion: data.direccion,
+        sector: data.sector,
         estado: 'nuevo',
       },
     });
