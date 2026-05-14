@@ -1,12 +1,13 @@
 import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common'
 import { ThirdPartiesService } from './third-parties.service'
 import { Permissions } from '../auth/permissions.decorator'
+import { AuthGuard } from '../auth/auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import { TenantId } from '../../common/decorators/tenant.decorator'
 import { ThirdPartyKind } from '@prisma/client'
 
 @Controller('third-parties')
-@UseGuards(PermissionsGuard)
+@UseGuards(AuthGuard, PermissionsGuard)
 export class ThirdPartiesController {
   constructor(private readonly thirdPartiesService: ThirdPartiesService) {}
 

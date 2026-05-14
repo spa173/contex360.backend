@@ -1,12 +1,13 @@
 import { Controller, Get, Post, Body, Param, Query, UseGuards } from '@nestjs/common'
 import { InventoryService } from './inventory.service'
 import { Permissions } from '../auth/permissions.decorator'
+import { AuthGuard } from '../auth/auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import { TenantId } from '../../common/decorators/tenant.decorator'
 import { InventoryMovementType } from '@prisma/client'
 
 @Controller('inventory')
-@UseGuards(PermissionsGuard)
+@UseGuards(AuthGuard, PermissionsGuard)
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 
