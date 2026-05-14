@@ -7,6 +7,27 @@ export interface RoleDefinition {
 
 export const ROLE_DEFINITIONS: RoleDefinition[] = [
   {
+    id: 'owner',
+    permissions: [
+      'view_dashboard', 'export_dashboard', 'manage_dashboard',
+      'view_billing', 'create_billing', 'manage_billing',
+      'view_inventory', 'manage_inventory',
+      'view_third_parties', 'manage_third_parties',
+      'view_accounting', 'manage_accounting',
+      'run_ocr', 'manage_users', 'manage_settings',
+    ],
+    views: ['dashboard', 'billing', 'inventory', 'accounting', 'third-parties', 'users', 'ai', 'profile'],
+    access: {
+      dashboard: ['view', 'export', 'configure'],
+      billing: ['view', 'create', 'edit', 'approve', 'export', 'configure'],
+      inventory: ['view', 'create', 'edit', 'approve', 'export', 'configure'],
+      accounting: ['view', 'create', 'edit', 'approve', 'export', 'configure'],
+      'third-parties': ['view', 'create', 'edit', 'export', 'configure'],
+      users: ['view', 'create', 'edit', 'approve', 'export', 'configure'],
+      ai: ['view', 'create', 'edit', 'export', 'configure'],
+    },
+  },
+  {
     id: 'Administrador',
     permissions: [
       'view_dashboard', 'export_dashboard', 'manage_dashboard',
