@@ -7,9 +7,12 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { AppModule } from './app.module'
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor'
 
+import { validateEnv } from './common/env-validator'
+
 const logger = new Logger('Bootstrap')
 
 async function bootstrap() {
+  validateEnv()
   const app = await NestFactory.create(AppModule)
   const configService = app.get(ConfigService)
   
