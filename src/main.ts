@@ -23,7 +23,7 @@ export async function bootstrap() {
     origin: allowedOrigins,
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    allowedHeaders: 'Content-Type,Accept,Authorization,X-Requested-With',
+    allowedHeaders: 'Content-Type,Accept,Authorization,X-Requested-With,x-tenant-id',
     exposedHeaders: 'Authorization',
     preflightContinue: false,
     optionsSuccessStatus: 204,
