@@ -29,7 +29,7 @@ export class PermissionsGuard implements CanActivate {
       return false
     }
 
-    const headerTenantId = request.headers['x-tenant-id'] as string
+    const headerTenantId = (request.headers as Record<string, string | string[] | undefined>)['x-tenant-id'] as string | undefined
     const activeTenantId = headerTenantId || authUser.tenantId
 
     // Fetch the membership to get the latest role
