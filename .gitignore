@@ -14,3 +14,6 @@ tests-local/
 
 # Scripts archivados
 _archive_scripts/
+
+# Colecciones de pruebas de API
+api-tests/
