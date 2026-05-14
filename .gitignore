@@ -11,3 +11,6 @@ coverage
 
 # Pruebas locales privadas
 tests-local/
+
+# Scripts archivados
+_archive_scripts/

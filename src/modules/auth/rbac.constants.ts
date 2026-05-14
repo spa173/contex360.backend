@@ -5,25 +5,6 @@ export interface RoleDefinition {
   access: Record<string, string[]>
 }
 
-export const PERMISSION_MODULES = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'billing', label: 'Facturacion' },
-  { id: 'inventory', label: 'Inventario' },
-  { id: 'accounting', label: 'Contabilidad' },
-  { id: 'third-parties', label: 'Terceros' },
-  { id: 'users', label: 'Usuarios' },
-  { id: 'ai', label: 'IA / OCR' },
-]
-
-export const PERMISSION_ACTIONS = [
-  { id: 'view', label: 'Ver' },
-  { id: 'create', label: 'Crear' },
-  { id: 'edit', label: 'Editar' },
-  { id: 'approve', label: 'Aprobar' },
-  { id: 'export', label: 'Exportar' },
-  { id: 'configure', label: 'Configurar' },
-]
-
 export const ROLE_DEFINITIONS: RoleDefinition[] = [
   {
     id: 'Administrador',

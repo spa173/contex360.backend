@@ -119,13 +119,7 @@ export interface PublicSessionSnapshot {
   revokedBy: string | null
 }
 
-export interface AuthMembershipSnapshot {
-  tenantId: string
-  role: string
-  permissions: string[]
-  accessibleViews: string[]
-  access: Record<string, string[]>
-}
+
 
 export interface AuthResponseSnapshot {
   ok: true
@@ -136,7 +130,13 @@ export interface AuthResponseSnapshot {
   session: PublicSessionSnapshot
   activeTenantId: string
   accessibleTenants: PublicTenantSnapshot[]
-  memberships: AuthMembershipSnapshot[]
+  memberships: {
+    tenantId: string
+    role: string
+    permissions: string[]
+    accessibleViews: string[]
+    access: Record<string, string[]>
+  }[]
 }
 
 export class RefreshTokenDto {
