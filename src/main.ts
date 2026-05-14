@@ -63,6 +63,8 @@ export async function bootstrap() {
   return app
 }
 
+export const viteNodeApp = process.env.VITE ? bootstrap() : null;
+
 if (!process.env.VITE) {
   bootstrap().catch((error: unknown) => {
     const message = error instanceof Error ? error.stack ?? error.message : String(error)
@@ -70,5 +72,3 @@ if (!process.env.VITE) {
     process.exit(1)
   })
 }
-
-export const viteNodeApp = bootstrap();
