@@ -76,6 +76,7 @@ model User {
   sessions          UserSession[]
   refreshTokens     RefreshToken[]
   inventoryMovements InventoryMovement[]
+  invoicesOwned     Invoice[]             @relation("InvoiceOwner")
   auditEvents       AuditEvent[]          @relation("AuditActorUser")
   roleAccessHistory RoleAccessHistory[]    @relation("RoleAccessActorUser")
 }
@@ -176,6 +177,8 @@ model Invoice {
   id             String         @id @default(cuid())
   tenantId       String
   clientId       String?
+  ownerUserId    String?
+  number         String         @default("")
   status         InvoiceStatus   @default(draft)
   subtotal       Decimal         @db.Decimal(14, 2)
   taxTotal       Decimal         @db.Decimal(14, 2)
@@ -190,6 +193,7 @@ model Invoice {
 
   tenant   Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   client   ThirdParty?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  ownerUser User?       @relation("InvoiceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   items    InvoiceItem[]
 
   @@index([tenantId, status])
@@ -219,19 +223,35 @@ model InvoiceItem {
 }
 
 model LedgerEntry {
-  id          String   @id @default(cuid())
-  tenantId    String
+  id            String      @id @default(cuid())
+  tenantId      String
   referenceType String
-  referenceId String?
-  description String
-  amount      Decimal  @db.Decimal(14, 2)
-  entryAt     DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  referenceId   String?
+  description   String
+  amount        Decimal     @db.Decimal(14, 2)
+  entryAt       DateTime    @default(now())
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lines         LedgerLine[]
 
   @@index([tenantId, entryAt])
+}
+
+model LedgerLine {
+  id            String      @id @default(cuid())
+  ledgerEntryId String
+  account       String
+  label         String
+  debit         Decimal     @db.Decimal(14, 2)
+  credit        Decimal     @db.Decimal(14, 2)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  ledgerEntry   LedgerEntry @relation(fields: [ledgerEntryId], references: [id], onDelete: Cascade)
+
+  @@index([ledgerEntryId])
 }
 
 model InventoryMovement {
