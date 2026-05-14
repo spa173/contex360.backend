@@ -3,5 +3,6 @@ import { AuthenticatedRequest } from '../../modules/auth/auth.types'
 
 export const TenantId = createParamDecorator((data: unknown, ctx: ExecutionContext) => {
   const request = ctx.switchToHttp().getRequest<AuthenticatedRequest>()
-  return request.authUser?.tenantId
+  const headerTenantId = request.headers['x-tenant-id']
+  return headerTenantId || request.authUser?.tenantId
 })

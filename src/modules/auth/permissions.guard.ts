@@ -29,12 +29,15 @@ export class PermissionsGuard implements CanActivate {
       return false
     }
 
+    const headerTenantId = request.headers['x-tenant-id'] as string
+    const activeTenantId = headerTenantId || authUser.tenantId
+
     // Fetch the membership to get the latest role
     const membership = await this.prisma.membership.findUnique({
       where: {
         userId_tenantId: {
           userId: authUser.sub,
-          tenantId: authUser.tenantId,
+          tenantId: activeTenantId,
         },
       },
     })
