@@ -2,9 +2,10 @@ import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, 
 import type { CookieOptions, Response } from 'express'
 import { AUTH_COOKIE_NAME, isOAuthProvider } from './auth.constants'
 import { AuthGuard } from './auth.guard'
-import { AuthenticatedRequest, ChangePasswordDto, LoginRequestDto, RefreshTokenDto, UpdateProfileDto } from './auth.types'
 import { AuthService } from './auth.service'
 import { TotpService } from './totp.service'
+import { ChangePasswordDto, LoginRequestDto, RefreshTokenDto, UpdateProfileDto } from './auth.types'
+import type { AuthenticatedRequest } from './auth.types'
 import { getDefaultFrontendCallbackUrl } from './oauth.providers'
 
 function resolveRequestContext(request?: Partial<AuthenticatedRequest>) {

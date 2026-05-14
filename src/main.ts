@@ -11,12 +11,11 @@ import { validateEnv } from './common/env-validator'
 
 const logger = new Logger('Bootstrap')
 
-async function bootstrap() {
+export async function bootstrap() {
   validateEnv()
   const app = await NestFactory.create(AppModule)
   const configService = app.get(ConfigService)
   
-  // Configuración de CORS más robusta para producción
   const corsOrigin = configService.get<string>('CORS_ORIGIN')
   const allowedOrigins = corsOrigin ? corsOrigin.split(',') : true
 
@@ -54,15 +53,22 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, swaggerConfig)
   SwaggerModule.setup(swaggerPath, app, document)
 
-  await app.listen(port, '0.0.0.0')
+  // Solo hacemos listen si NO estamos en entorno de Vite (donde Vite maneja el servidor)
+  if (!process.env.VITE) {
+    await app.listen(port, '0.0.0.0')
+    const url = await app.getUrl()
+    logger.log(`${appName} running at ${url}`)
+  }
 
-  const url = await app.getUrl()
-  logger.log(`${appName} running at ${url}`)
-  logger.log(`CORS origins: ${allowedOrigins === true ? 'All (Reflect)' : allowedOrigins}`)
+  return app
 }
 
-bootstrap().catch((error: unknown) => {
-  const message = error instanceof Error ? error.stack ?? error.message : String(error)
-  logger.error('Failed to start backend', message)
-  process.exit(1)
-})
+if (!process.env.VITE) {
+  bootstrap().catch((error: unknown) => {
+    const message = error instanceof Error ? error.stack ?? error.message : String(error)
+    logger.error('Failed to start backend', message)
+    process.exit(1)
+  })
+}
+
+export const viteNodeApp = bootstrap();

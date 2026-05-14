@@ -3,7 +3,7 @@ import { AnalyticsService } from './analytics.service'
 import { Permissions } from '../auth/permissions.decorator'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import { TenantId } from '../../common/decorators/tenant.decorator'
-import { Response } from 'express'
+import type { Response } from 'express'
 
 @Controller('analytics')
 @UseGuards(PermissionsGuard)

@@ -1,8 +1,8 @@
 import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common'
 import { AuthGuard } from '../auth/auth.guard'
 import { AdminGuard } from '../auth/admin.guard'
-import { AuthenticatedRequest } from '../auth/auth.types'
 import { AdminService } from './admin.service'
+import type { AuthenticatedRequest } from '../auth/auth.types'
 
 @Controller('admin')
 @UseGuards(AuthGuard, AdminGuard)
