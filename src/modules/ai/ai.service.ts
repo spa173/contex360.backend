@@ -58,6 +58,19 @@ export class AiService {
               },
             },
           },
+          {
+            name: 'get_advanced_analytics',
+            description: 'Obtiene analítica detallada (ventas, gastos, tendencias) filtrada por rangos de fecha y comparación de periodos.',
+            parameters: {
+              type: 'OBJECT',
+              properties: {
+                startDate: { type: 'STRING', description: 'Fecha inicio (ISO 8601, ej: 2024-01-01).' },
+                endDate: { type: 'STRING', description: 'Fecha fin (ISO 8601).' },
+                targetTenantId: { type: 'STRING', description: 'ID de empresa (opcional para Root).' },
+                metric: { type: 'STRING', enum: ['sales', 'inventory', 'expenses', 'all'], description: 'Métrica específica a consultar.' }
+              }
+            }
+          }
         ],
       },
     ]
@@ -132,6 +145,33 @@ export class AiService {
             role: m.role,
             position: m.user.title
           }))
+        }
+      }
+
+      if (name === 'get_advanced_analytics') {
+        const { startDate, endDate, metric } = args
+        const report = await this.analytics.getSalesReport(tenantId, startDate, endDate)
+        const topProducts = await this.analytics.getTopProducts(tenantId, 5)
+        
+        // Detección simple de anomalías (Gasto > promedio histórico)
+        const expenses = await this.prisma.purchase.findMany({
+          where: { tenantId, status: { not: 'cancelled' } },
+          select: { total: true, issuedAt: true }
+        })
+        const avgExpense = expenses.length > 0 
+          ? expenses.reduce((s, e) => s + Number(e.total), 0) / expenses.length 
+          : 0
+        const highExpenses = expenses.filter(e => Number(e.total) > avgExpense * 1.5)
+
+        return {
+          report,
+          topProducts,
+          anomalies: highExpenses.map(e => ({
+            date: e.issuedAt,
+            amount: e.total,
+            reason: 'Gasto 50% superior al promedio histórico'
+          })),
+          suggestedFormat: 'JSON_CHARTS' // Hint para que Gemini sepa que debe estructurar datos
         }
       }
 
