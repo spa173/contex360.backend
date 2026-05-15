@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common'
+import { Module, Global } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { JwtModule } from '@nestjs/jwt'
 import { type SignOptions } from 'jsonwebtoken'
@@ -7,7 +7,9 @@ import { AuthController } from './auth.controller'
 import { AuthGuard } from './auth.guard'
 import { AuthService } from './auth.service'
 import { TotpService } from './totp.service'
+import { PermissionsGuard } from './permissions.guard'
 
+@Global()
 @Module({
   imports: [
     PrismaModule,
@@ -23,7 +25,7 @@ import { TotpService } from './totp.service'
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, AuthGuard, TotpService],
-  exports: [AuthService, JwtModule, AuthGuard, TotpService],
+  providers: [AuthService, AuthGuard, TotpService, PermissionsGuard],
+  exports: [AuthService, JwtModule, AuthGuard, TotpService, PermissionsGuard],
 })
 export class AuthModule {}
