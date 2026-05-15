@@ -83,13 +83,19 @@ export class InvoicesService {
       const taxTotal = data.items.reduce((acc, item) => acc + (item.unitPrice * item.quantity * (item.taxRate / 100)), 0)
       const total = subtotal + taxTotal
 
-      // 2. Create Invoice
+      // 2. Calculate due date
+      const issuedAt = new Date()
+      const dueAt = new Date(issuedAt)
+      dueAt.setDate(dueAt.getDate() + (data.paymentTermDays || 30))
+
+      // 3. Create Invoice
       const invoice = await tx.invoice.create({
         data: {
           tenantId,
           clientId: data.clientId,
           number: invoiceNumber,
           paymentTermDays: data.paymentTermDays,
+          dueAt,
           notes: data.notes,
           subtotal,
           taxTotal,
@@ -112,7 +118,7 @@ export class InvoicesService {
         include: { items: true },
       })
 
-      // 3. Update Stock and create Inventory Movements
+      // 4. Update Stock and create Inventory Movements
       for (const item of data.items) {
         const product = await tx.product.findUnique({ where: { id: item.productId } })
         if (!product) throw new NotFoundException(`Producto ${item.productId} no encontrado`)
@@ -252,5 +258,96 @@ export class InvoicesService {
 
       return cancelledInvoice
     })
+  }
+
+  async getOverdue(tenantId: string) {
+    const now = new Date()
+    const invoices = await this.prisma.invoice.findMany({
+      where: {
+        tenantId,
+        status: { not: 'cancelled' },
+        dueAt: { lt: now },
+      },
+      include: { client: true },
+      orderBy: { dueAt: 'asc' },
+    })
+
+    const totalOverdue = invoices.reduce((sum, inv) => sum + Number(inv.total), 0)
+
+    return {
+      totalOverdue,
+      invoiceCount: invoices.length,
+      invoices: invoices.map(inv => ({
+        id: inv.id,
+        number: inv.number,
+        client: inv.client?.name || 'N/A',
+        total: Number(inv.total),
+        dueAt: inv.dueAt,
+        daysOverdue: Math.floor((now.getTime() - new Date(inv.dueAt!).getTime()) / (1000 * 60 * 60 * 24)),
+      })),
+    }
+  }
+
+  async getAging(tenantId: string) {
+    const now = new Date()
+    const invoices = await this.prisma.invoice.findMany({
+      where: {
+        tenantId,
+        status: { not: 'cancelled' },
+      },
+      include: { client: true },
+    })
+
+    const buckets = {
+      current: { label: 'Al día', days: 0, invoices: [] as any[], total: 0 },
+      bucket1: { label: '1-30 días', days: 30, invoices: [] as any[], total: 0 },
+      bucket2: { label: '31-60 días', days: 60, invoices: [] as any[], total: 0 },
+      bucket3: { label: '61-90 días', days: 90, invoices: [] as any[], total: 0 },
+      bucket4: { label: '90+ días', days: Infinity, invoices: [] as any[], total: 0 },
+    }
+
+    for (const inv of invoices) {
+      if (!inv.dueAt) continue
+      const daysOverdue = Math.floor((now.getTime() - new Date(inv.dueAt).getTime()) / (1000 * 60 * 60 * 24))
+      const total = Number(inv.total)
+
+      const invoiceData = {
+        id: inv.id,
+        number: inv.number,
+        client: inv.client?.name || 'N/A',
+        total,
+        dueAt: inv.dueAt,
+        daysOverdue,
+      }
+
+      if (daysOverdue <= 0) {
+        buckets.current.invoices.push(invoiceData)
+        buckets.current.total += total
+      } else if (daysOverdue <= 30) {
+        buckets.bucket1.invoices.push(invoiceData)
+        buckets.bucket1.total += total
+      } else if (daysOverdue <= 60) {
+        buckets.bucket2.invoices.push(invoiceData)
+        buckets.bucket2.total += total
+      } else if (daysOverdue <= 90) {
+        buckets.bucket3.invoices.push(invoiceData)
+        buckets.bucket3.total += total
+      } else {
+        buckets.bucket4.invoices.push(invoiceData)
+        buckets.bucket4.total += total
+      }
+    }
+
+    return {
+      totalPortfolio: Object.values(buckets).reduce((sum, b) => sum + b.total, 0),
+      totalOverdue: buckets.bucket1.total + buckets.bucket2.total + buckets.bucket3.total + buckets.bucket4.total,
+      buckets: [
+        { ...buckets.current, count: buckets.current.invoices.length },
+        { ...buckets.bucket1, count: buckets.bucket1.invoices.length },
+        { ...buckets.bucket2, count: buckets.bucket2.invoices.length },
+        { ...buckets.bucket3, count: buckets.bucket3.invoices.length },
+        { ...buckets.bucket4, count: buckets.bucket4.invoices.length },
+      ],
+    }
   }
 }

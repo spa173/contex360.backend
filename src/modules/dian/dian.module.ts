@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common'
 import { DianService } from './dian.service'
 import { DianController } from './dian.controller'
-import { DatabaseModule } from '../database/database.module'
+import { PrismaModule } from '../database/prisma.module'
 
 @Module({
-  imports: [DatabaseModule],
+  imports: [PrismaModule],
   providers: [DianService],
   controllers: [DianController],
   exports: [DianService],

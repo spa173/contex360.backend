@@ -143,6 +143,7 @@ model Tenant {
   roleAccessHistory RoleAccessHistory[]
   subscription      Subscription?
   transactions       Transaction[]
+  quotes             Quote[]
 }
 
 model Membership {
@@ -174,6 +175,7 @@ model ThirdParty {
   tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   invoices  Invoice[]
   purchases Purchase[]
+  quotes    Quote[]
 
   @@unique([tenantId, nit])
   @@index([tenantId, kind])
@@ -205,6 +207,7 @@ model Product {
   invoiceItems       InvoiceItem[]
   purchaseItems      PurchaseItem[]
   inventoryMovements InventoryMovement[]
+  quoteItems         QuoteItem[]
 
   @@unique([tenantId, sku])
   @@index([tenantId, category])
@@ -257,6 +260,60 @@ model InvoiceItem {
   product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([invoiceId])
+  @@index([productId])
+}
+
+enum QuoteStatus {
+  draft
+  sent
+  accepted
+  rejected
+  converted
+}
+
+model Quote {
+  id             String      @id @default(cuid())
+  tenantId       String
+  clientId       String?
+  number         String      @default("")
+  status         QuoteStatus @default(draft)
+  subtotal       Decimal     @db.Decimal(14, 2)
+  taxTotal       Decimal     @db.Decimal(14, 2)
+  total          Decimal     @db.Decimal(14, 2)
+  validUntil     DateTime?
+  notes          String?
+  terms          String?
+  convertedToInvoiceId String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client   ThirdParty? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  items    QuoteItem[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+}
+
+model QuoteItem {
+  id          String   @id @default(cuid())
+  quoteId     String
+  productId   String?
+  lineNumber  Int
+  productName String
+  quantity    Int
+  unitPrice   Decimal  @db.Decimal(14, 2)
+  taxRate     Decimal  @db.Decimal(5, 2)
+  subtotal    Decimal  @db.Decimal(14, 2)
+  taxAmount   Decimal  @db.Decimal(14, 2)
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  quote   Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([quoteId])
   @@index([productId])
 }
 

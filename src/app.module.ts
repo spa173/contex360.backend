@@ -20,6 +20,7 @@ import { LedgerModule } from './modules/ledger/ledger.module'
 import { PurchasesModule } from './modules/purchases/purchases.module'
 import { DianModule } from './modules/dian/dian.module'
 import { TreasuryModule } from './modules/treasury/treasury.module'
+import { QuotesModule } from './modules/quotes/quotes.module'
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { TreasuryModule } from './modules/treasury/treasury.module'
     PurchasesModule,
     DianModule,
     TreasuryModule,
+    QuotesModule,
   ],
   controllers: [AppController],
   providers: [

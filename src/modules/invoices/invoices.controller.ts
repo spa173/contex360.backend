@@ -22,6 +22,18 @@ export class InvoicesController {
     return this.invoicesService.getNextNumber(tenantId)
   }
 
+  @Get('overdue')
+  @Permissions('view_billing')
+  getOverdue(@TenantId() tenantId: string) {
+    return this.invoicesService.getOverdue(tenantId)
+  }
+
+  @Get('aging')
+  @Permissions('view_billing')
+  getAging(@TenantId() tenantId: string) {
+    return this.invoicesService.getAging(tenantId)
+  }
+
   @Get(':id')
   @Permissions('view_billing')
   findOne(@TenantId() tenantId: string, @Param('id') id: string) {
