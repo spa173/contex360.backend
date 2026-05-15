@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { PrismaService } from '../database/prisma.service'
 import { AnalyticsService } from '../analytics/analytics.service'
+import { LOGISTIC_BRAIN_PROMPT } from './ai.prompts'
 
 @Injectable()
 export class AiService {
@@ -17,7 +18,7 @@ export class AiService {
     this.genAI = new GoogleGenerativeAI(apiKey || '')
   }
 
-  async processChat(tenantId: string, message: string) {
+  async processChat(tenantId: string, isSystemOwner: boolean, message: string, history: any[] = []) {
     const now = new Date()
     const formattedDate = now.toLocaleDateString('es-CO', { 
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
@@ -26,62 +27,126 @@ export class AiService {
       hour: '2-digit', minute: '2-digit' 
     })
 
-    const [stats, products, pendingInvoices] = await Promise.all([
-      this.analytics.getDashboardKpis(tenantId),
-      this.prisma.product.findMany({ where: { tenantId }, take: 50 }),
-      this.prisma.invoice.findMany({ 
-        where: { tenantId },
-        orderBy: { createdAt: 'desc' },
-        include: { client: true },
-        take: 20
-      })
-    ])
+    const systemPrompt = LOGISTIC_BRAIN_PROMPT(tenantId, isSystemOwner, formattedDate, formattedTime)
 
-    const systemPrompt = `
-      Eres el "Cerebro Logístico de Contex360", experto en gestión de inventarios y análisis financiero.
-      Tu objetivo es ayudar al usuario a optimizar su capital y su operación basándote en los datos del sistema.
-      
-      TIEMPO: ${formattedDate}, ${formattedTime}
-      
-      DATOS OPERATIVOS:
-      - Ventas Totales: $${stats.totalSales.toLocaleString()}
-      - Alertas Stock Mínimo: ${stats.lowStockAlerts}
-      - Valor Inventario: $${(Number(stats.totalSales) * 0.7).toLocaleString()} (Estimado)
-      
-      KARDEX (Resumen):
-      ${products.map(p => `- ${p.name} | Stock: ${p.stock} | SKU: ${p.sku}`).join('\n')}
-      
-      FACTURACIÓN RECIENTE:
-      ${pendingInvoices.map((i: any) => `- Factura ${i.id.slice(-6).toUpperCase()} | $${Number(i.total).toLocaleString()} | Cliente: ${i.client?.name || 'N/A'} | Estado: ${i.status}`).join('\n')}
-      
-      ### REGLAS MAESTRAS:
-      1. Responde SIEMPRE en español de forma analítica y preventiva.
-      2. Usa términos: Punto de reorden, Stock de seguridad, Kardex.
-      3. No menciones detalles técnicos de la IA.
-      4. Si preguntan por contraseñas o usuarios, redirige a la "Consola Admin".
-      5. Diferenciación: Los "Servicios" no requieren stock (no alarmar si es 0).
-    `
+    const tools = [
+      {
+        functionDeclarations: [
+          {
+            name: 'get_company_summary',
+            description: 'Obtiene el resumen financiero (ventas, alertas) y la lista de colaboradores/empleados de la empresa.',
+            parameters: {
+              type: 'OBJECT',
+              properties: {
+                targetTenantId: {
+                  type: 'STRING',
+                  description: 'ID de la empresa a consultar. Opcional (por defecto usa la activa).',
+                },
+              },
+            },
+          },
+          {
+            name: 'get_inventory_status',
+            description: 'Consulta el estado actual del inventario, productos y alertas de stock.',
+            parameters: {
+              type: 'OBJECT',
+              properties: {
+                query: {
+                  type: 'STRING',
+                  description: 'Filtro de búsqueda o categoría (opcional).',
+                },
+              },
+            },
+          },
+        ],
+      },
+    ]
 
     try {
       const model = this.genAI.getGenerativeModel({ 
-        model: 'gemini-2.5-flash-lite',
+        model: 'gemini-2.0-flash-exp',
+        systemInstruction: systemPrompt,
+        tools: tools as any,
       })
 
-      const result = await model.generateContent([
-        { text: systemPrompt },
-        { text: `Pregunta del usuario: ${message}` }
-      ])
+      const chat = model.startChat({
+        history: history,
+      })
+
+      let result = await chat.sendMessage(message)
+      let responseText = ''
+
+      // Manejo de Function Calling
+      const parts = result.response.candidates?.[0]?.content?.parts || []
+      const call = parts.find(p => p.functionCall)
       
-      const responseText = result.response.text().trim()
+      if (call?.functionCall) {
+        const { name, args } = call.functionCall
+        // Validar permisos para targetTenantId si el usuario no es Root
+        const effectiveTenantId = (isSystemOwner && args.targetTenantId) ? args.targetTenantId : tenantId
+        
+        const functionResult = await this.executeTool(name, args, effectiveTenantId)
+        
+        const response = await chat.sendMessage([
+          {
+            functionResponse: {
+              name,
+              response: functionResult
+            }
+          }
+        ])
+        responseText = response.response.text().trim()
+      } else {
+        responseText = result.response.text().trim()
+      }
 
       return this.formatResponse(responseText)
     } catch (error: any) {
       console.error('Gemini Error:', error.message)
       return {
         role: 'assistant',
-        content: 'Hubo un problema al conectar con el cerebro de Gemini. Por favor, verifica tu API Key y tu conexión a internet.',
-        suggestedAction: undefined
+        content: 'Hubo un problema al procesar la solicitud con el cerebro de IA.',
       }
+    }
+  }
+
+  private async executeTool(name: string, args: any, tenantId: string) {
+    try {
+      if (name === 'get_company_summary') {
+        const [stats, memberships] = await Promise.all([
+          this.analytics.getDashboardKpis(tenantId),
+          this.prisma.membership.findMany({
+            where: { tenantId },
+            include: { user: { select: { name: true, email: true, title: true } } }
+          })
+        ])
+
+        return {
+          financials: {
+            totalSales: stats.totalSales,
+            lowStockAlerts: stats.lowStockAlerts,
+            currency: 'COP'
+          },
+          employees: memberships.map(m => ({
+            name: m.user.name,
+            role: m.role,
+            position: m.user.title
+          }))
+        }
+      }
+
+      if (name === 'get_inventory_status') {
+        const products = await this.prisma.product.findMany({
+          where: { tenantId },
+          take: 30,
+          select: { name: true, stock: true, sku: true, price: true }
+        })
+        return { products }
+      }
+
+      return { error: 'Herramienta no reconocida' }
+    } catch (error: any) {
+      return { error: `Error ejecutando herramienta: ${error.message}` }
     }
   }
 
