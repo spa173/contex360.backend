@@ -150,4 +150,16 @@ export class AnalyticsService {
       .sort((a, b) => b.totalRevenue - a.totalRevenue)
       .slice(0, limit)
   }
+
+  async getAggregates(tenantId: string, model: string, operation: '_sum' | '_avg' | '_count', field?: string, where: any = {}) {
+    const prismaModel = (this.prisma as any)[model]
+    if (!prismaModel) throw new Error(`Model ${model} not found`)
+
+    const result = await prismaModel.aggregate({
+      where: { ...where, tenantId },
+      [operation]: field ? { [field]: true } : true,
+    })
+
+    return result
+  }
 }

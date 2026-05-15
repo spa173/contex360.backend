@@ -70,6 +70,19 @@ export class AiService {
                 metric: { type: 'STRING', enum: ['sales', 'inventory', 'expenses', 'all'], description: 'Métrica específica a consultar.' }
               }
             }
+          },
+          {
+            name: 'get_custom_metrics',
+            description: 'Realiza cálculos complejos (sumas, promedios, conteos) sobre cualquier tabla (Invoice, Product, Purchase) con filtros personalizados.',
+            parameters: {
+              type: 'OBJECT',
+              properties: {
+                model: { type: 'STRING', enum: ['invoice', 'product', 'purchase', 'ledgerEntry'], description: 'Tabla sobre la cual calcular.' },
+                operation: { type: 'STRING', enum: ['_sum', '_avg', '_count'], description: 'Operación matemática.' },
+                field: { type: 'STRING', description: 'Campo numérico (ej: total, stock, price).' },
+                where: { type: 'OBJECT', description: 'Filtros de Prisma (opcional).' }
+              }
+            }
           }
         ],
       },
@@ -173,6 +186,11 @@ export class AiService {
           })),
           suggestedFormat: 'JSON_CHARTS' // Hint para que Gemini sepa que debe estructurar datos
         }
+      }
+
+      if (name === 'get_custom_metrics') {
+        const { model, operation, field, where } = args
+        return await this.analytics.getAggregates(tenantId, model, operation, field, where)
       }
 
       if (name === 'get_inventory_status') {
