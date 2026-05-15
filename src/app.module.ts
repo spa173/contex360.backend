@@ -16,6 +16,7 @@ import { AiModule } from './modules/ai/ai.module'
 import { AdminModule } from './modules/admin/admin.module'
 import { NotificationModule } from './modules/notification/notification.module'
 import { DemoModule } from './modules/demo/demo.module'
+import { LedgerModule } from './modules/ledger/ledger.module'
 
 @Module({
   imports: [
@@ -41,6 +42,7 @@ import { DemoModule } from './modules/demo/demo.module'
     AdminModule,
     NotificationModule,
     DemoModule,
+    LedgerModule,
   ],
   controllers: [AppController],
   providers: [
