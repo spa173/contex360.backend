@@ -128,5 +128,22 @@ export const ROLE_DEFINITIONS: RoleDefinition[] = [
       users: [],
       ai: [],
     },
+  {
+    id: 'Operador',
+    permissions: [
+      'view_dashboard',
+      'view_billing', 'create_billing',
+      'view_inventory', 'manage_inventory',
+      'view_third_parties'
+    ],
+    views: ['dashboard', 'billing', 'inventory', 'third-parties', 'profile'],
+    access: {
+      dashboard: ['view'],
+      billing: ['view', 'create'],
+      inventory: ['view', 'create', 'edit'],
+      'third-parties': ['view', 'create'],
+      users: [],
+      ai: [],
+    },
   },
 ]

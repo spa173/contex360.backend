@@ -65,6 +65,7 @@ export interface AuthTokenPayload {
   tenantId: string
   email: string
   isSystemOwner: boolean
+  tenantIds: string[]
 }
 
 export interface AuthenticatedRequest {

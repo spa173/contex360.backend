@@ -28,11 +28,8 @@ async function main() {
     console.error('ERROR: Seed script cannot be run in production environment.')
     return
   }
-  const accountantPasswordHash = hashSync(seedPassword('contador@contex360.local'), 10)
-  const visorPasswordHash = hashSync(seedPassword('visor@contex360.local'), 10)
-  const retailAdminPasswordHash = hashSync(seedPassword('retail.admin@contex360.local'), 10)
-  const payrollPasswordHash = hashSync(seedPassword('nomina@contex360.local'), 10)
 
+  // --- Tenants ---
   const tenantA = await prisma.tenant.upsert({
     where: { prefix: 'CL' },
     update: {},
@@ -40,6 +37,7 @@ async function main() {
       id: 'tenant-a',
       name: 'Contex Labs SAS',
       prefix: 'CL',
+      nit: '900111222-1',
       allowNegativeStock: false,
       sector: 'Servicios profesionales',
       city: 'Bogota',
@@ -55,6 +53,7 @@ async function main() {
       id: 'tenant-b',
       name: 'Nova Retail SAS',
       prefix: 'NR',
+      nit: '800333444-2',
       allowNegativeStock: true,
       sector: 'Comercio minorista',
       city: 'Medellin',
@@ -63,292 +62,125 @@ async function main() {
     },
   })
 
-
-  const accountantUser = await prisma.user.upsert({
-    where: { email: 'contador@contex360.local' },
-    update: {
-      name: 'Daniela Rojas',
-      title: 'Contador senior',
-      status: UserStatus.active,
-      passwordHash: accountantPasswordHash,
-      passwordSalt: 'bcryptjs',
+  // --- Users ---
+  const usersToCreate = [
+    {
+      id: 'user-root',
+      email: 'root@contex360.local',
+      name: 'Super Administrador',
+      title: 'Global Root',
+      isSystemOwner: true,
+      role: null,
+      tenantId: null,
     },
-    create: {
-      id: 'user-accountant',
-      name: 'Daniela Rojas',
-      email: 'contador@contex360.local',
-      title: 'Contador senior',
-      status: UserStatus.active,
-      isDemoAccount: true,
+    {
+      id: 'user-admin-labs',
+      email: 'admin.labs@contex360.local',
+      name: 'Admin Labs',
+      title: 'Administrador Contex Labs',
       isSystemOwner: false,
-      passwordHash: accountantPasswordHash,
-      passwordSalt: 'bcryptjs',
-    },
-  })
-
-  const visorUser = await prisma.user.upsert({
-    where: { email: 'visor@contex360.local' },
-    update: {
-      name: 'Santiago Velez',
-      title: 'Visor operativo',
-      status: UserStatus.active,
-      passwordHash: visorPasswordHash,
-      passwordSalt: 'bcryptjs',
-    },
-    create: {
-      id: 'user-visor',
-      name: 'Santiago Velez',
-      email: 'visor@contex360.local',
-      title: 'Visor operativo',
-      status: UserStatus.active,
-      isDemoAccount: true,
-      isSystemOwner: false,
-      passwordHash: visorPasswordHash,
-      passwordSalt: 'bcryptjs',
-    },
-  })
-
-  const retailAdminUser = await prisma.user.upsert({
-    where: { email: 'retail.admin@contex360.local' },
-    update: {
-      name: 'Valeria Pinto',
-      title: 'Admin retail',
-      status: UserStatus.active,
-      passwordHash: retailAdminPasswordHash,
-      passwordSalt: 'bcryptjs',
-    },
-    create: {
-      id: 'user-retail-admin',
-      name: 'Valeria Pinto',
-      email: 'retail.admin@contex360.local',
-      title: 'Admin retail',
-      status: UserStatus.active,
-      isDemoAccount: true,
-      isSystemOwner: false,
-      passwordHash: retailAdminPasswordHash,
-      passwordSalt: 'bcryptjs',
-    },
-  })
-
-  const payrollUser = await prisma.user.upsert({
-    where: { email: 'nomina@contex360.local' },
-    update: {
-      name: 'Laura Bernal',
-      title: 'Coordinacion de nomina',
-      status: UserStatus.active,
-      passwordHash: payrollPasswordHash,
-      passwordSalt: 'bcryptjs',
-    },
-    create: {
-      id: 'user-payroll',
-      name: 'Laura Bernal',
-      email: 'nomina@contex360.local',
-      title: 'Coordinacion de nomina',
-      status: UserStatus.active,
-      isDemoAccount: true,
-      isSystemOwner: false,
-      passwordHash: payrollPasswordHash,
-      passwordSalt: 'bcryptjs',
-    },
-  })
-
-
-  await prisma.membership.upsert({
-    where: {
-      userId_tenantId: {
-        userId: accountantUser.id,
-        tenantId: tenantA.id,
-      },
-    },
-    update: {
-      role: 'Contador',
-    },
-    create: {
-      userId: accountantUser.id,
-      tenantId: tenantA.id,
-      role: 'Contador',
-    },
-  })
-
-  await prisma.membership.upsert({
-    where: {
-      userId_tenantId: {
-        userId: visorUser.id,
-        tenantId: tenantB.id,
-      },
-    },
-    update: {
-      role: 'Visor',
-    },
-    create: {
-      userId: visorUser.id,
-      tenantId: tenantB.id,
-      role: 'Visor',
-    },
-  })
-
-  await prisma.membership.upsert({
-    where: {
-      userId_tenantId: {
-        userId: retailAdminUser.id,
-        tenantId: tenantB.id,
-      },
-    },
-    update: {
       role: 'Administrador',
-    },
-    create: {
-      userId: retailAdminUser.id,
-      tenantId: tenantB.id,
-      role: 'Administrador',
-    },
-  })
-
-  await prisma.membership.upsert({
-    where: {
-      userId_tenantId: {
-        userId: payrollUser.id,
-        tenantId: tenantA.id,
-      },
-    },
-    update: {
-      role: 'Usuario nomina',
-    },
-    create: {
-      userId: payrollUser.id,
       tenantId: tenantA.id,
-      role: 'Usuario nomina',
     },
-  })
+    {
+      id: 'user-admin-retail',
+      email: 'admin.retail@contex360.local',
+      name: 'Admin Retail',
+      title: 'Administrador Nova Retail',
+      isSystemOwner: false,
+      role: 'Administrador',
+      tenantId: tenantB.id,
+    },
+    {
+      id: 'user-operator-labs',
+      email: 'operator.labs@contex360.local',
+      name: 'Operador Labs',
+      title: 'Operador Contex Labs',
+      isSystemOwner: false,
+      role: 'Operador',
+      tenantId: tenantA.id,
+    },
+    {
+      id: 'user-operator-retail',
+      email: 'operator.retail@contex360.local',
+      name: 'Operador Retail',
+      title: 'Operador Nova Retail',
+      isSystemOwner: false,
+      role: 'Operador',
+      tenantId: tenantB.id,
+    },
+  ]
 
+  for (const u of usersToCreate) {
+    const passwordHash = hashSync(seedPassword(u.email), 10)
+    
+    const user = await prisma.user.upsert({
+      where: { email: u.email },
+      update: {
+        name: u.name,
+        title: u.title,
+        status: UserStatus.active,
+        passwordHash,
+        passwordSalt: 'bcryptjs',
+        isSystemOwner: u.isSystemOwner,
+      },
+      create: {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        title: u.title,
+        status: UserStatus.active,
+        isDemoAccount: true,
+        isSystemOwner: u.isSystemOwner,
+        passwordHash,
+        passwordSalt: 'bcryptjs',
+      },
+    })
 
-  await prisma.userSecurityProfile.upsert({
-    where: { userId: accountantUser.id },
-    update: {
-      twoFactorEnabled: true,
-      twoFactorRequired: true,
-      passwordResetRequired: false,
-      passwordUpdatedAt: new Date('2026-04-18T14:30:00.000Z'),
-      riskLevel: 'low',
-      passwordHistory: [],
-      failedLoginAttempts: 0,
-      lockedUntil: null,
-      trustedFingerprints: [],
-    },
-    create: {
-      userId: accountantUser.id,
-      twoFactorEnabled: true,
-      twoFactorRequired: true,
-      passwordResetRequired: false,
-      passwordUpdatedAt: new Date('2026-04-18T14:30:00.000Z'),
-      riskLevel: 'low',
-      passwordHistory: [],
-      failedLoginAttempts: 0,
-      lockedUntil: null,
-      trustedFingerprints: [],
-    },
-  })
+    if (u.tenantId && u.role) {
+      await prisma.membership.upsert({
+        where: {
+          userId_tenantId: {
+            userId: user.id,
+            tenantId: u.tenantId,
+          },
+        },
+        update: { role: u.role },
+        create: {
+          userId: user.id,
+          tenantId: u.tenantId,
+          role: u.role,
+        },
+      })
+    }
 
-  await prisma.userSecurityProfile.upsert({
-    where: { userId: visorUser.id },
-    update: {
-      twoFactorEnabled: false,
-      twoFactorRequired: false,
-      passwordResetRequired: false,
-      passwordUpdatedAt: new Date('2026-04-10T10:00:00.000Z'),
-      riskLevel: 'low',
-      passwordHistory: [],
-      failedLoginAttempts: 0,
-      lockedUntil: null,
-      trustedFingerprints: [],
-    },
-    create: {
-      userId: visorUser.id,
-      twoFactorEnabled: false,
-      twoFactorRequired: false,
-      passwordResetRequired: false,
-      passwordUpdatedAt: new Date('2026-04-10T10:00:00.000Z'),
-      resetRequestedAt: null,
-      tempPasswordExpiresAt: null,
-      riskLevel: 'low',
-      passwordHistory: [],
-      failedLoginAttempts: 0,
-      lockedUntil: null,
-      trustedFingerprints: [],
-    },
-  })
+    await prisma.userSecurityProfile.upsert({
+      where: { userId: user.id },
+      update: {
+        passwordUpdatedAt: new Date(),
+        passwordResetRequired: false,
+      },
+      create: {
+        userId: user.id,
+        twoFactorEnabled: false,
+        twoFactorRequired: false,
+        passwordResetRequired: false,
+        passwordUpdatedAt: new Date(),
+        riskLevel: 'low',
+        passwordHistory: [],
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+        trustedFingerprints: [],
+      },
+    })
+  }
 
-  await prisma.userSecurityProfile.upsert({
-    where: { userId: retailAdminUser.id },
-    update: {
-      twoFactorEnabled: true,
-      twoFactorRequired: true,
-      passwordResetRequired: false,
-      passwordUpdatedAt: new Date('2026-04-19T11:10:00.000Z'),
-      riskLevel: 'low',
-      passwordHistory: [],
-      failedLoginAttempts: 0,
-      lockedUntil: null,
-      trustedFingerprints: [],
-    },
-    create: {
-      userId: retailAdminUser.id,
-      twoFactorEnabled: true,
-      twoFactorRequired: true,
-      passwordResetRequired: false,
-      passwordUpdatedAt: new Date('2026-04-19T11:10:00.000Z'),
-      resetRequestedAt: null,
-      tempPasswordExpiresAt: null,
-      riskLevel: 'low',
-      passwordHistory: [],
-      failedLoginAttempts: 0,
-      lockedUntil: null,
-      trustedFingerprints: [],
-    },
-  })
-
-  await prisma.userSecurityProfile.upsert({
-    where: { userId: payrollUser.id },
-    update: {
-      twoFactorEnabled: false,
-      twoFactorRequired: false,
-      passwordResetRequired: false,
-      passwordUpdatedAt: new Date('2026-04-09T12:00:00.000Z'),
-      riskLevel: 'low',
-      passwordHistory: [],
-      failedLoginAttempts: 0,
-      lockedUntil: null,
-      trustedFingerprints: [],
-    },
-    create: {
-      userId: payrollUser.id,
-      twoFactorEnabled: false,
-      twoFactorRequired: false,
-      passwordResetRequired: false,
-      passwordUpdatedAt: new Date('2026-04-09T12:00:00.000Z'),
-      resetRequestedAt: null,
-      tempPasswordExpiresAt: null,
-      riskLevel: 'low',
-      passwordHistory: [],
-      failedLoginAttempts: 0,
-      lockedUntil: null,
-      trustedFingerprints: [],
-    },
-  })
+  // --- Data for Tenant A ---
+  const decimal = (value: string) => new Prisma.Decimal(value)
 
   await prisma.thirdParty.upsert({
-    where: {
-      tenantId_nit: {
-        tenantId: tenantA.id,
-        nit: '900123456-7',
-      },
-    },
-    update: {
-      name: 'Constructora Altos SAS',
-      email: 'contabilidad@altos.co',
-      kind: ThirdPartyKind.client,
-      taxProfile: 'Responsable de IVA',
-    },
+    where: { tenantId_nit: { tenantId: tenantA.id, nit: '900123456-7' } },
+    update: {},
     create: {
       tenantId: tenantA.id,
       name: 'Constructora Altos SAS',
@@ -359,44 +191,9 @@ async function main() {
     },
   })
 
-  await prisma.thirdParty.upsert({
-    where: {
-      tenantId_nit: {
-        tenantId: tenantA.id,
-        nit: '830456789-1',
-      },
-    },
-    update: {
-      name: 'Suministros Andinos SAS',
-      email: 'ventas@andinos.co',
-      kind: ThirdPartyKind.provider,
-      taxProfile: 'Gran contribuyente',
-    },
-    create: {
-      tenantId: tenantA.id,
-      name: 'Suministros Andinos SAS',
-      nit: '830456789-1',
-      email: 'ventas@andinos.co',
-      kind: ThirdPartyKind.provider,
-      taxProfile: 'Gran contribuyente',
-    },
-  })
-
-  const decimal = (value: string) => new Prisma.Decimal(value)
-
   const product = await prisma.product.upsert({
-    where: {
-      tenantId_sku: {
-        tenantId: tenantA.id,
-        sku: 'PRD-001',
-      },
-    },
-    update: {
-      name: 'Servicio de implementacion',
-      price: decimal('1500000.00'),
-      cost: decimal('900000.00'),
-      taxRate: decimal('19.00'),
-    },
+    where: { tenantId_sku: { tenantId: tenantA.id, sku: 'PRD-001' } },
+    update: {},
     create: {
       tenantId: tenantA.id,
       sku: 'PRD-001',
@@ -417,74 +214,14 @@ async function main() {
     },
   })
 
-  await prisma.invoice.upsert({
-    where: {
-      id: 'seed-invoice-1',
-    },
-    update: {
-      tenantId: tenantA.id,
-      clientId: (await prisma.thirdParty.findUnique({
-        where: {
-          tenantId_nit: {
-            tenantId: tenantA.id,
-            nit: '900123456-7',
-          },
-        },
-      }))?.id,
-      status: 'emitted',
-      subtotal: decimal('1500000.00'),
-      taxTotal: decimal('285000.00'),
-      total: decimal('1785000.00'),
-      paymentTermDays: 30,
-      notes: 'Factura semilla para desarrollo.',
-      dueAt: new Date('2026-05-20T00:00:00.000Z'),
-      timeline: [],
-    },
-    create: {
-      id: 'seed-invoice-1',
-      tenantId: tenantA.id,
-      clientId: (
-        await prisma.thirdParty.findUnique({
-          where: {
-            tenantId_nit: {
-              tenantId: tenantA.id,
-              nit: '900123456-7',
-            },
-          },
-        })
-      )?.id,
-      status: 'emitted',
-      subtotal: decimal('1500000.00'),
-      taxTotal: decimal('285000.00'),
-      total: decimal('1785000.00'),
-      paymentTermDays: 30,
-      notes: 'Factura semilla para desarrollo.',
-      dueAt: new Date('2026-05-20T00:00:00.000Z'),
-      timeline: [],
-      items: {
-        create: [
-          {
-            lineNumber: 1,
-            productId: product.id,
-            productName: product.name,
-            quantity: 1,
-            unitPrice: decimal('1500000.00'),
-            unitCost: decimal('900000.00'),
-            taxRate: decimal('19.00'),
-            subtotal: decimal('1500000.00'),
-            taxAmount: decimal('285000.00'),
-          },
-        ],
-      },
-    },
-  })
-
   process.stdout.write(
     [
-      'Seed completed.',
-      `Tenants: ${tenantA.prefix}, ${tenantB.prefix}`,
-      `Users: ${accountantUser.email}, ${visorUser.email}, ${retailAdminUser.email}, ${payrollUser.email}`,
-      `Accountant password: ${seedPassword(accountantUser.email)}`,
+      'Seed completed successfully.',
+      `Tenants: ${tenantA.name} (${tenantA.id}), ${tenantB.name} (${tenantB.id})`,
+      `Root: root@contex360.local`,
+      `Admins: admin.labs@contex360.local, admin.retail@contex360.local`,
+      `Operators: operator.labs@contex360.local, operator.retail@contex360.local`,
+      `Default password: [email]!A1`,
     ].join('\n') + '\n',
   )
 }

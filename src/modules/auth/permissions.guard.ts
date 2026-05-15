@@ -29,6 +29,10 @@ export class PermissionsGuard implements CanActivate {
       return false
     }
 
+    if (authUser.isSystemOwner) {
+      return true
+    }
+
     const headerTenantId = (request.headers as Record<string, string | string[] | undefined>)['x-tenant-id'] as string | undefined
     const activeTenantId = headerTenantId || authUser.tenantId
 

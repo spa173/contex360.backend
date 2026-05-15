@@ -113,7 +113,7 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales invalidas. Revisa el email y la clave.')
     }
 
-    if (!user.memberships.length) {
+    if (!user.memberships.length && !user.isSystemOwner) {
       throw new ForbiddenException('El usuario no tiene empresas asignadas.')
     }
 
@@ -254,7 +254,9 @@ export class AuthService {
       user: this.mapUserSnapshot(user),
       session: this.mapSessionSnapshot({ ...session, lastSeenAt: now }),
       activeTenantId: activeTenant.id,
-      accessibleTenants: user.memberships.map((membership) => this.mapTenantSnapshot(membership.tenant)),
+      accessibleTenants: user.isSystemOwner 
+        ? (await this.prisma.tenant.findMany()).map(t => this.mapTenantSnapshot(t))
+        : user.memberships.map((membership) => this.mapTenantSnapshot(membership.tenant)),
       memberships: user.memberships.map((membership) => {
         const roleDef = ROLE_DEFINITIONS.find((r) => r.id === membership.role)
         return {
@@ -295,13 +297,15 @@ export class AuthService {
       throw new ForbiddenException('Este usuario aun no esta habilitado por un administrador.')
     }
 
-    if (!user.memberships.length) {
+    if (!user.memberships.length && !user.isSystemOwner) {
       throw new ForbiddenException('El usuario no tiene empresas asignadas.')
     }
 
     const now = new Date()
-    const activeTenant = this.resolveActiveTenant(user, user.memberships[0].tenant.id)
-    const session = await this.createSession(user, activeTenant.id, context, now)
+    const activeTenantIdFromMembership = user.memberships[0]?.tenant.id
+    const activeTenantId = activeTenantIdFromMembership || 'system'
+    const activeTenant = this.resolveActiveTenant(user, activeTenantId)
+    const session = await this.createSession(user, activeTenant?.id || 'system', context, now)
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -321,9 +325,10 @@ export class AuthService {
     const accessToken = await this.jwtService.signAsync({
       sub: user.id,
       sessionId: session.id,
-      tenantId: activeTenant.id,
+      tenantId: activeTenant?.id || 'system',
       email: user.email,
       isSystemOwner: user.isSystemOwner,
+      tenantIds: user.memberships.map(m => m.tenantId),
     })
 
     const rawRefreshToken = randomBytes(48).toString('hex')
@@ -341,8 +346,10 @@ export class AuthService {
       refreshToken: rawRefreshToken,
       user: this.mapUserSnapshot({ ...user, lastLoginAt: now }),
       session: this.mapSessionSnapshot(session),
-      activeTenantId: activeTenant.id,
-      accessibleTenants: user.memberships.map((membership) => this.mapTenantSnapshot(membership.tenant)),
+      activeTenantId: activeTenant?.id || 'system',
+      accessibleTenants: user.isSystemOwner
+        ? (await this.prisma.tenant.findMany()).map(t => this.mapTenantSnapshot(t))
+        : user.memberships.map((membership) => this.mapTenantSnapshot(membership.tenant)),
       memberships: user.memberships.map((membership) => {
         const roleDef = ROLE_DEFINITIONS.find((r) => r.id === membership.role)
         return {
@@ -434,11 +441,11 @@ export class AuthService {
     }
   }
 
-  private resolveActiveTenant(user: UserWithAuthRelations, tenantId?: string) {
+  private async resolveActiveTenant(user: UserWithAuthRelations, tenantId?: string) {
     const memberships = user.memberships
-    const tenantFromToken = tenantId ? memberships.find((membership) => membership.tenantId === tenantId)?.tenant : null
+    const tenantFromToken = tenantId ? (memberships.find((membership) => membership.tenantId === tenantId)?.tenant || (user.isSystemOwner ? await this.prisma.tenant.findUnique({ where: { id: tenantId } }) : null)) : null
 
-    return tenantFromToken || memberships[0].tenant
+    return tenantFromToken || memberships[0]?.tenant || null
   }
 
   private async createSession(

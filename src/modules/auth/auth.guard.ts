@@ -44,9 +44,20 @@ export class AuthGuard implements CanActivate {
 
     for (const token of tokens) {
       try {
-        request.authUser = await this.jwtService.verifyAsync<AuthTokenPayload>(token)
+        const payload = await this.jwtService.verifyAsync<AuthTokenPayload>(token)
+        
+        // Tenant validation
+        const headerTenantId = (request.headers as any)['x-tenant-id']
+        if (headerTenantId) {
+          if (!payload.isSystemOwner && !payload.tenantIds.includes(headerTenantId)) {
+            throw new UnauthorizedException('No tienes acceso a esta empresa.')
+          }
+        }
+
+        request.authUser = payload
         return true
-      } catch {
+      } catch (error: any) {
+        if (error instanceof UnauthorizedException) throw error
         continue
       }
     }
