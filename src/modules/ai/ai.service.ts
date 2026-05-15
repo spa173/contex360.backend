@@ -19,6 +19,14 @@ export class AiService {
   }
 
   async processChat(tenantId: string, isSystemOwner: boolean, message: string, history: any[] = []) {
+    const apiKey = this.config.get<string>('GEMINI_API_KEY')
+    if (!apiKey) {
+      return {
+        role: 'assistant',
+        content: 'Configuración incompleta: GEMINI_API_KEY no encontrada en el servidor.',
+      }
+    }
+
     const now = new Date()
     const formattedDate = now.toLocaleDateString('es-CO', { 
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
@@ -99,17 +107,21 @@ export class AiService {
         history: history,
       })
 
-      let result = await chat.sendMessage(message)
+      const result = await chat.sendMessage(message)
+      if (!result.response) {
+        throw new Error('Respuesta vacía de Gemini')
+      }
+
       let responseText = ''
 
-      // Manejo de Function Calling
-      const parts = result.response.candidates?.[0]?.content?.parts || []
-      const call = parts.find(p => p.functionCall)
+      // Manejo robusto de Function Calling / Parts
+      const candidates = result.response.candidates || []
+      const parts = candidates[0]?.content?.parts || []
+      const call = parts.find(p => p && p.functionCall)
       
       if (call?.functionCall) {
         const { name, args } = call.functionCall
-        // Validar permisos para targetTenantId si el usuario no es Root
-        const effectiveTenantId = (isSystemOwner && (args as any).targetTenantId) ? (args as any).targetTenantId : tenantId
+        const effectiveTenantId = (isSystemOwner && (args as any)?.targetTenantId) ? (args as any).targetTenantId : tenantId
         
         const functionResult = await this.executeTool(name, args, effectiveTenantId)
         
@@ -121,17 +133,17 @@ export class AiService {
             }
           }
         ])
-        responseText = response.response.text().trim()
+        responseText = response.response.text() || 'Operación completada con éxito.'
       } else {
-        responseText = result.response.text().trim()
+        responseText = result.response.text() || 'No pude generar una respuesta de texto.'
       }
 
-      return this.formatResponse(responseText)
+      return this.formatResponse(responseText.trim())
     } catch (error: any) {
-      console.error('Gemini Error:', error.message)
+      console.error('AiService Error:', error.stack || error.message)
       return {
         role: 'assistant',
-        content: 'Hubo un problema al procesar la solicitud con el cerebro de IA.',
+        content: `Error del Cerebro IA: ${error.message || 'Error desconocido'}. Por favor contacta a soporte.`,
       }
     }
   }
