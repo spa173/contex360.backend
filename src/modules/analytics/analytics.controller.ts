@@ -1,12 +1,13 @@
 import { Controller, Get, Query, UseGuards, Res } from '@nestjs/common'
 import { AnalyticsService } from './analytics.service'
 import { Permissions } from '../auth/permissions.decorator'
+import { AuthGuard } from '../auth/auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import { TenantId } from '../../common/decorators/tenant.decorator'
 import type { Response } from 'express'
 
 @Controller('analytics')
-@UseGuards(PermissionsGuard)
+@UseGuards(AuthGuard, PermissionsGuard)
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
