@@ -8,8 +8,9 @@
   "scripts": {
     "dev": "vite",
     "start:dev": "vite",
-    "build": "vite build",
+    "build": "tsc -p tsconfig.build.json",
     "start": "node dist/main",
+    "start:prod": "node dist/main",
     "db:setup": "node scripts/setup-dev-db.js",
     "db:stop": "node scripts/stop-dev-db.js",
     "db:migrate": "prisma migrate dev --name init",
