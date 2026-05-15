@@ -1,10 +1,14 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../database/prisma.service'
+import { LedgerService } from '../ledger/ledger.service'
 import { InvoiceStatus } from '@prisma/client'
 
 @Injectable()
 export class InvoicesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ledger: LedgerService,
+  ) {}
 
   async findAll(tenantId: string) {
     return this.prisma.invoice.findMany({
@@ -33,6 +37,29 @@ export class InvoicesService {
     return invoice
   }
 
+  private async generateInvoiceNumber(tx: any, tenantId: string): Promise<string> {
+    const tenant = await tx.tenant.update({
+      where: { id: tenantId },
+      data: { lastInvoiceNumber: { increment: 1 } },
+      select: { invoicePrefix: true, lastInvoiceNumber: true }
+    }) as any
+    return `${tenant.invoicePrefix}-${String(tenant.lastInvoiceNumber).padStart(6, '0')}`
+  }
+
+  async getNextNumber(tenantId: string) {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { invoicePrefix: true, lastInvoiceNumber: true } as any
+    }) as any
+    if (!tenant) throw new NotFoundException('Tenant no encontrado')
+    const nextNumber = Number(tenant.lastInvoiceNumber || 0) + 1
+    return {
+      prefix: tenant.invoicePrefix || 'FV',
+      nextNumber,
+      preview: `${tenant.invoicePrefix || 'FV'}-${String(nextNumber).padStart(6, '0')}`
+    }
+  }
+
   async create(tenantId: string, data: {
     clientId: string
     paymentTermDays: number
@@ -49,6 +76,9 @@ export class InvoicesService {
       const tenant = await tx.tenant.findUnique({ where: { id: tenantId } })
       if (!tenant) throw new NotFoundException('Tenant no encontrado')
 
+      // 1.5 Generate invoice number
+      const invoiceNumber = await this.generateInvoiceNumber(tx, tenantId)
+
       const subtotal = data.items.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0)
       const taxTotal = data.items.reduce((acc, item) => acc + (item.unitPrice * item.quantity * (item.taxRate / 100)), 0)
       const total = subtotal + taxTotal
@@ -58,6 +88,7 @@ export class InvoicesService {
         data: {
           tenantId,
           clientId: data.clientId,
+          number: invoiceNumber,
           paymentTermDays: data.paymentTermDays,
           notes: data.notes,
           subtotal,
@@ -117,11 +148,109 @@ export class InvoicesService {
     })
   }
 
+  async updateStatus(tenantId: string, id: string, status: InvoiceStatus) {
+    const invoice = await this.findOne(tenantId, id)
+
+    const updated = await this.prisma.invoice.update({
+      where: { id },
+      data: { status },
+      include: { items: true },
+    })
+
+    // When marked as accepted (paid), create cash-receipt ledger entry
+    if (status === InvoiceStatus.accepted) {
+      await this.ledger.create(tenantId, {
+        referenceType: 'payment_in',
+        referenceId: id,
+        description: `Cobro Factura ${invoice.number || id}`,
+        amount: Number(invoice.total),
+        lines: [
+          {
+            account: '110505',
+            label: 'Caja general',
+            debit: Number(invoice.total),
+            credit: 0,
+          },
+          {
+            account: '130505',
+            label: 'Clientes nacionales',
+            debit: 0,
+            credit: Number(invoice.total),
+          },
+        ],
+      })
+    }
+
+    return updated
+  }
+
   async remove(tenantId: string, id: string) {
     await this.findOne(tenantId, id)
-    // Logic for cancelling/deleting and restoring stock could be added here
     return this.prisma.invoice.delete({
       where: { id },
+    })
+  }
+
+  async cancel(tenantId: string, id: string, reason?: string) {
+    return this.prisma.$transaction(async (tx) => {
+      // 1. Find invoice with items
+      const invoice = await tx.invoice.findFirst({
+        where: { id, tenantId },
+        include: { items: true },
+      })
+
+      if (!invoice) {
+        throw new NotFoundException('Factura no encontrada')
+      }
+
+      if (invoice.status === InvoiceStatus.cancelled) {
+        throw new BadRequestException('La factura ya está cancelada')
+      }
+
+      // 2. Update invoice status
+      const cancelledInvoice = await tx.invoice.update({
+        where: { id },
+        data: {
+          status: InvoiceStatus.cancelled,
+          notes: reason ? `${invoice.notes || ''}\n[CANCELADA: ${reason}]` : invoice.notes,
+        },
+        include: { items: true },
+      })
+
+      // 3. Reverse inventory for each item
+      for (const item of invoice.items) {
+        if (!item.productId) continue
+
+        const product = await tx.product.findUnique({
+          where: { id: item.productId },
+        })
+
+        if (!product || !product.isInventoriable) continue
+
+        // Restore stock
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { stock: { increment: item.quantity } },
+        })
+
+        // Create reversal inventory movement
+        await tx.inventoryMovement.create({
+          data: {
+            tenantId,
+            productId: item.productId,
+            productName: product.name,
+            type: 'entrada',
+            quantity: item.quantity,
+            reason: `Reversión - Cancelación Factura ${invoice.number || invoice.id}`,
+            batch: '',
+            note: reason || `Cancelación de factura ${invoice.number || invoice.id}`,
+            referenceId: invoice.id,
+            at: new Date(),
+          },
+        })
+      }
+
+      return cancelledInvoice
     })
   }
 }

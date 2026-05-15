@@ -17,6 +17,9 @@ import { AdminModule } from './modules/admin/admin.module'
 import { NotificationModule } from './modules/notification/notification.module'
 import { DemoModule } from './modules/demo/demo.module'
 import { LedgerModule } from './modules/ledger/ledger.module'
+import { PurchasesModule } from './modules/purchases/purchases.module'
+import { DianModule } from './modules/dian/dian.module'
+import { TreasuryModule } from './modules/treasury/treasury.module'
 
 @Module({
   imports: [
@@ -43,6 +46,9 @@ import { LedgerModule } from './modules/ledger/ledger.module'
     NotificationModule,
     DemoModule,
     LedgerModule,
+    PurchasesModule,
+    DianModule,
+    TreasuryModule,
   ],
   controllers: [AppController],
   providers: [

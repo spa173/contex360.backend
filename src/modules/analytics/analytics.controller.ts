@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards, Res } from '@nestjs/common'
+import { Controller, Get, Query, UseGuards, Res } from '@nestjs/common'
 import { AnalyticsService } from './analytics.service'
 import { Permissions } from '../auth/permissions.decorator'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -29,5 +29,24 @@ export class AnalyticsController {
     res.header('Content-Type', 'text/csv')
     res.attachment(`facturas-${tenantId}-${Date.now()}.csv`)
     return res.send(csv)
+  }
+
+  @Get('sales-report')
+  @Permissions('view_reports')
+  getSalesReport(
+    @TenantId() tenantId: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.analyticsService.getSalesReport(tenantId, from, to)
+  }
+
+  @Get('top-products')
+  @Permissions('view_reports')
+  getTopProducts(
+    @TenantId() tenantId: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.analyticsService.getTopProducts(tenantId, parseInt(limit || '10'))
   }
 }

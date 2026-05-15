@@ -39,6 +39,24 @@ enum InventoryTransferStatus {
   cancelado
 }
 
+enum PurchaseStatus {
+  draft
+  registered
+  paid
+  cancelled
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum TransactionCategory {
+  CAJA
+  BANCO
+  PETTY_CASH
+}
+
 enum AuditSeverity {
   info
   warning
@@ -94,12 +112,28 @@ model Tenant {
   costMethod        String?
   dianStatus        String?
   securitySettings  Json
+  invoicePrefix     String                @default("FV")
+  lastInvoiceNumber Int                   @default(0)
+  invoiceResolution String?
+  resolutionFrom    DateTime?
+  resolutionTo      DateTime?
+  purchasePrefix    String                @default("CO")
+  lastPurchaseNumber Int                  @default(0)
+  dianEnvironment   String                @default("test") // test | production
+  dianTestSetId     String?
+  dianSoftwareId    String?
+  dianSoftwarePin   String?
+  dianCertificate   String?               // Base64 del certificado
+  dianCertificatePassword String?
+  dianNit           String?               // NIT para envío DIAN
+  dianOperationCode String                 @default("10") // 10: factura ordinaria
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
   memberships       Membership[]
   thirdParties      ThirdParty[]
   products          Product[]
   invoices          Invoice[]
+  purchases         Purchase[]
   ledgerEntries     LedgerEntry[]
   inventoryMovements InventoryMovement[]
   inventoryTransfers InventoryTransfer[]
@@ -108,6 +142,7 @@ model Tenant {
   auditEvents       AuditEvent[]
   roleAccessHistory RoleAccessHistory[]
   subscription      Subscription?
+  transactions       Transaction[]
 }
 
 model Membership {
@@ -136,8 +171,9 @@ model ThirdParty {
   createdAt  DateTime       @default(now())
   updatedAt  DateTime       @updatedAt
 
-  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  invoices Invoice[]
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoices  Invoice[]
+  purchases Purchase[]
 
   @@unique([tenantId, nit])
   @@index([tenantId, kind])
@@ -167,6 +203,7 @@ model Product {
 
   tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   invoiceItems       InvoiceItem[]
+  purchaseItems      PurchaseItem[]
   inventoryMovements InventoryMovement[]
 
   @@unique([tenantId, sku])
@@ -194,7 +231,8 @@ model Invoice {
   tenant   Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   client   ThirdParty?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
   ownerUser User?       @relation("InvoiceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
-  items    InvoiceItem[]
+  items        InvoiceItem[]
+  transactions Transaction[]
 
   @@index([tenantId, status])
   @@index([tenantId, issuedAt])
@@ -219,6 +257,52 @@ model InvoiceItem {
   product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([invoiceId])
+  @@index([productId])
+}
+
+model Purchase {
+  id             String         @id @default(cuid())
+  tenantId       String
+  providerId     String?
+  number         String         @default("")
+  status         PurchaseStatus @default(draft)
+  subtotal       Decimal        @db.Decimal(14, 2)
+  taxTotal       Decimal        @db.Decimal(14, 2)
+  total          Decimal        @db.Decimal(14, 2)
+  paymentTermDays Int           @default(30)
+  notes          String?
+  issuedAt       DateTime       @default(now())
+  dueAt          DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider ThirdParty? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  items        PurchaseItem[]
+  transactions Transaction[]
+
+  @@index([tenantId, status])
+  @@index([tenantId, issuedAt])
+}
+
+model PurchaseItem {
+  id           String   @id @default(cuid())
+  purchaseId   String
+  productId    String?
+  lineNumber   Int
+  productName  String
+  quantity     Int
+  unitPrice    Decimal  @db.Decimal(14, 2)
+  taxRate      Decimal  @db.Decimal(5, 2)
+  subtotal     Decimal  @db.Decimal(14, 2)
+  taxAmount    Decimal  @db.Decimal(14, 2)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  purchase Purchase  @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product  Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([purchaseId])
   @@index([productId])
 }
 
@@ -430,6 +514,28 @@ model DemoRequest {
   updatedAt DateTime          @updatedAt
 
   @@index([estado, createdAt])
+}
+
+model Transaction {
+  id          String              @id @default(cuid())
+  tenantId    String
+  type        TransactionType
+  amount      Decimal             @db.Decimal(14, 2)
+  date        DateTime            @default(now())
+  description String
+  category    TransactionCategory @default(CAJA)
+  reference   String?
+  invoiceId   String?
+  purchaseId  String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoice     Invoice?            @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  purchase    Purchase?           @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, date])
+  @@index([tenantId, type])
 }
 
 model Subscription {
