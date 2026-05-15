@@ -15,7 +15,27 @@ export class AiService {
     private readonly config: ConfigService,
   ) {
     const apiKey = this.config.get<string>('GEMINI_API_KEY')
-    this.genAI = new GoogleGenerativeAI(apiKey || '')
+    this.genAI = new GoogleGenerativeAI(apiKey || '', { apiVersion: 'v1' })
+  }
+
+  async checkHealth() {
+    try {
+      const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+      const result = await model.generateContent('ping')
+      return {
+        status: 'ok',
+        model: 'gemini-1.5-flash',
+        apiVersion: 'v1',
+        response: result.response.text().substring(0, 50)
+      }
+    } catch (error: any) {
+      return {
+        status: 'error',
+        message: error.message,
+        stack: error.stack,
+        details: error.response?.data || error.response || 'No extra details'
+      }
+    }
   }
 
   async processChat(tenantId: string, isSystemOwner: boolean, message: string, history: any[] = []) {

@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards } from '@nestjs/common'
+import { Controller, Post, Get, Body, UseGuards } from '@nestjs/common'
 import { AiService } from './ai.service'
 import { AuthGuard } from '../auth/auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
@@ -19,5 +19,10 @@ export class AiController {
     @Body('history') history: any[]
   ) {
     return this.aiService.processChat(tenantId, user.isSystemOwner, message, history)
+  }
+
+  @Get('health')
+  health() {
+    return this.aiService.checkHealth()
   }
 }
