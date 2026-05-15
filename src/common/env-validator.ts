@@ -5,9 +5,6 @@ const logger = new Logger('EnvValidator');
 const REQUIRED_ENV_VARS = [
   'DATABASE_URL',
   'JWT_SECRET',
-  'OAUTH_STATE_SECRET',
-  'GOOGLE_CLIENT_ID',
-  'GOOGLE_CLIENT_SECRET',
 ];
 
 export function validateEnv() {

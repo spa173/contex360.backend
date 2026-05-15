@@ -5,7 +5,7 @@ services:
     region: ohio
     branch: master
     buildCommand: npm run render:build
-    startCommand: npm run start
+    startCommand: node --max-old-space-size=450 dist/main.js
     envVars:
       - key: NODE_OPTIONS
         value: --max-old-space-size=450
@@ -19,3 +19,5 @@ services:
         value: Contex360 Backend
       - key: CORS_ORIGIN
         value: http://localhost:5173,https://contex360fronted.vercel.app
+      - key: NODE_ENV
+        value: production

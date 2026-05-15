@@ -15,7 +15,7 @@ export class AiService {
     private readonly config: ConfigService,
   ) {
     const apiKey = this.config.get<string>('GEMINI_API_KEY')
-    this.genAI = new GoogleGenerativeAI(apiKey || '', { apiVersion: 'v1' })
+    this.genAI = new GoogleGenerativeAI(apiKey || '')
   }
 
   async checkHealth() {
