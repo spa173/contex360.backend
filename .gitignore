@@ -17,3 +17,6 @@ _archive_scripts/
 
 # Colecciones de pruebas de API
 api-tests/
+
+# Windsurf skills (privadas, no subir a GitHub)
+.windsurf/skills/
