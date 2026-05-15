@@ -83,7 +83,7 @@ export class AiService {
       if (call?.functionCall) {
         const { name, args } = call.functionCall
         // Validar permisos para targetTenantId si el usuario no es Root
-        const effectiveTenantId = (isSystemOwner && args.targetTenantId) ? args.targetTenantId : tenantId
+        const effectiveTenantId = (isSystemOwner && (args as any).targetTenantId) ? (args as any).targetTenantId : tenantId
         
         const functionResult = await this.executeTool(name, args, effectiveTenantId)
         

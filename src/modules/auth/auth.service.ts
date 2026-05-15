@@ -240,7 +240,7 @@ export class AuthService {
       throw new UnauthorizedException('Token de acceso invalido o expirado.')
     }
 
-    const activeTenant = this.resolveActiveTenant(user, authUser.tenantId)
+    const activeTenant = await this.resolveActiveTenant(user, authUser.tenantId)
     const now = new Date()
 
     await this.prisma.userSession.update({
@@ -304,7 +304,7 @@ export class AuthService {
     const now = new Date()
     const activeTenantIdFromMembership = user.memberships[0]?.tenant.id
     const activeTenantId = activeTenantIdFromMembership || 'system'
-    const activeTenant = this.resolveActiveTenant(user, activeTenantId)
+    const activeTenant = await this.resolveActiveTenant(user, activeTenantId)
     const session = await this.createSession(user, activeTenant?.id || 'system', context, now)
 
     await this.prisma.user.update({

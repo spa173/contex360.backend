@@ -128,6 +128,7 @@ export const ROLE_DEFINITIONS: RoleDefinition[] = [
       users: [],
       ai: [],
     },
+  },
   {
     id: 'Operador',
     permissions: [

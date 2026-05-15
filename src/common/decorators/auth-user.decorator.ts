@@ -5,5 +5,5 @@ export const AuthUser = createParamDecorator((data: string | undefined, ctx: Exe
   const request = ctx.switchToHttp().getRequest<AuthenticatedRequest>()
   const user = request.authUser
 
-  return data ? user?.[data] : user
+  return data ? (user as any)?.[data] : user
 })
