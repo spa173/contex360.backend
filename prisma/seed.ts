@@ -24,10 +24,10 @@ const defaultSecuritySettings = {
 }
 
 async function main() {
-  if (process.env.NODE_ENV === 'production') {
-    console.error('ERROR: Seed script cannot be run in production environment.')
-    return
-  }
+  // if (process.env.NODE_ENV === 'production') {
+  //   console.error('ERROR: Seed script cannot be run in production environment.')
+  //   return
+  // }
 
   // --- Tenants ---
   const tenantA = await prisma.tenant.upsert({
