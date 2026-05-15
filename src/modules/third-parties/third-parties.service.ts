@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common'
 import { PrismaService } from '../database/prisma.service'
-import { ThirdPartyKind } from '@prisma/client'
+import { ThirdPartyKind, TaxRegime } from '@prisma/client'
 
 @Injectable()
 export class ThirdPartiesService {
@@ -32,8 +32,13 @@ export class ThirdPartiesService {
     name: string
     nit: string
     email: string
+    phone?: string
+    address?: string
+    city?: string
     kind: ThirdPartyKind
     taxProfile: string
+    taxRegime?: TaxRegime
+    fiscalResponsibilities?: string[]
   }) {
     return this.prisma.thirdParty.create({
       data: {
@@ -47,8 +52,14 @@ export class ThirdPartiesService {
     name: string
     nit: string
     email: string
+    phone: string
+    address: string
+    city: string
     kind: ThirdPartyKind
     taxProfile: string
+    taxRegime: TaxRegime
+    fiscalResponsibilities: string[]
+    isActive: boolean
   }>) {
     await this.findOne(tenantId, id)
 

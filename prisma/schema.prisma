@@ -17,6 +17,13 @@ enum UserStatus {
 enum ThirdPartyKind {
   client
   provider
+  employee
+}
+
+enum TaxRegime {
+  simplificado
+  comun
+  especial
 }
 
 enum InvoiceStatus {
@@ -162,15 +169,21 @@ model Membership {
 }
 
 model ThirdParty {
-  id         String         @id @default(cuid())
-  tenantId   String
-  name       String
-  nit        String
-  email      String
-  kind       ThirdPartyKind
-  taxProfile String
-  createdAt  DateTime       @default(now())
-  updatedAt  DateTime       @updatedAt
+  id                      String         @id @default(cuid())
+  tenantId                String
+  name                    String
+  nit                     String
+  email                   String
+  phone                   String?
+  address                 String?
+  city                    String?
+  kind                    ThirdPartyKind
+  taxProfile              String
+  taxRegime               TaxRegime      @default(comun)
+  fiscalResponsibilities  String[]       @default([])
+  isActive                Boolean        @default(true)
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
 
   tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   invoices  Invoice[]
@@ -179,6 +192,7 @@ model ThirdParty {
 
   @@unique([tenantId, nit])
   @@index([tenantId, kind])
+  @@index([tenantId, isActive])
 }
 
 model Product {

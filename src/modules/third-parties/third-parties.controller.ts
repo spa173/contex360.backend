@@ -4,7 +4,7 @@ import { Permissions } from '../auth/permissions.decorator'
 import { AuthGuard } from '../auth/auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import { TenantId } from '../../common/decorators/tenant.decorator'
-import { ThirdPartyKind } from '@prisma/client'
+import { ThirdPartyKind, TaxRegime } from '@prisma/client'
 
 @Controller('third-parties')
 @UseGuards(AuthGuard, PermissionsGuard)
@@ -31,8 +31,13 @@ export class ThirdPartiesController {
       name: string
       nit: string
       email: string
+      phone?: string
+      address?: string
+      city?: string
       kind: ThirdPartyKind
       taxProfile: string
+      taxRegime?: TaxRegime
+      fiscalResponsibilities?: string[]
     },
   ) {
     return this.thirdPartiesService.create(tenantId, data)
@@ -47,8 +52,14 @@ export class ThirdPartiesController {
       name: string
       nit: string
       email: string
+      phone: string
+      address: string
+      city: string
       kind: ThirdPartyKind
       taxProfile: string
+      taxRegime: TaxRegime
+      fiscalResponsibilities: string[]
+      isActive: boolean
     }>,
   ) {
     return this.thirdPartiesService.update(tenantId, id, data)
