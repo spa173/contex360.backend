@@ -4,8 +4,8 @@ services:
     runtime: node
     region: ohio
     branch: master
-    buildCommand: npm install && npx prisma generate && NODE_OPTIONS="--max-old-space-size=400" npx tsc -p tsconfig.build.json
-    startCommand: node --max-old-space-size=400 dist/main
+    buildCommand: npm run render:build
+    startCommand: npm run start
     envVars:
       - key: NODE_OPTIONS
         value: --max-old-space-size=400
