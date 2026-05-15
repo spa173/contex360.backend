@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "commonjs",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "description": "NestJS backend for Contex360",
   "main": "dist/main.js",
   "scripts": {
