@@ -376,4 +376,29 @@ export class AiService {
       suggestedAction
     }
   }
+
+  async translateText(texts: Record<string, string>, targetLang: string) {
+    try {
+      const model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+      const prompt = `You are a professional translator for an ERP system. 
+      Translate the following JSON object containing UI strings from Spanish to ${targetLang}. 
+      Maintain the same keys. Preserve technical terms like 'ERP', 'DIAN', 'KPI', 'OCR'.
+      Return ONLY the valid JSON object.
+      
+      JSON to translate:
+      ${JSON.stringify(texts, null, 2)}`
+
+      const result = await model.generateContent(prompt)
+      const response = result.response.text()
+      
+      // Extract JSON if it contains markdown markers
+      const jsonMatch = response.match(/\{[\s\S]*\}/)
+      const cleanJson = jsonMatch ? jsonMatch[0] : response
+      
+      return JSON.parse(cleanJson)
+    } catch (error: any) {
+      console.error('Translation Error:', error.message)
+      throw new Error(`Failed to translate: ${error.message}`)
+    }
+  }
 }

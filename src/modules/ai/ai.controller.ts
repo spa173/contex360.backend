@@ -22,6 +22,14 @@ export class AiController {
     return this.aiService.processChat(tenantId, userName, user.isSystemOwner, message, history)
   }
 
+  @Post('translate')
+  translate(
+    @Body('texts') texts: Record<string, string>,
+    @Body('targetLang') targetLang: string
+  ) {
+    return this.aiService.translateText(texts, targetLang)
+  }
+
   @Get('health')
   health() {
     return this.aiService.checkHealth()
