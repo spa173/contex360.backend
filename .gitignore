@@ -23,3 +23,5 @@ api-tests/
 .agents/
 .gemini/
 .graphify/
+skills/
+skills-lock.json
