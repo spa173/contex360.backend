@@ -18,7 +18,8 @@ export class AiController {
     @Body('message') message: string,
     @Body('history') history: any[]
   ) {
-    return this.aiService.processChat(tenantId, user.isSystemOwner, message, history)
+    const userName = user.email ? user.email.split('@')[0] : 'Usuario'
+    return this.aiService.processChat(tenantId, userName, user.isSystemOwner, message, history)
   }
 
   @Get('health')

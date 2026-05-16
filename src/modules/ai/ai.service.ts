@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { PrismaService } from '../database/prisma.service'
 import { AnalyticsService } from '../analytics/analytics.service'
-import { LOGISTIC_BRAIN_PROMPT } from './ai.prompts'
+import { PERSONAL_ASSISTANT_PROMPT } from './ai.prompts'
 
 @Injectable()
 export class AiService {
@@ -38,7 +38,7 @@ export class AiService {
     }
   }
 
-  async processChat(tenantId: string, isSystemOwner: boolean, message: string, history: any[] = []) {
+  async processChat(tenantId: string, userName: string, isSystemOwner: boolean, message: string, history: any[] = []) {
     const apiKey = this.config.get<string>('GEMINI_API_KEY')
     if (!apiKey) {
       return {
@@ -55,7 +55,7 @@ export class AiService {
       hour: '2-digit', minute: '2-digit' 
     })
 
-    const systemPrompt = LOGISTIC_BRAIN_PROMPT(tenantId, isSystemOwner, formattedDate, formattedTime)
+    const systemPrompt = PERSONAL_ASSISTANT_PROMPT(tenantId, userName, isSystemOwner, formattedDate, formattedTime)
 
     const tools = [
       {
@@ -109,6 +109,29 @@ export class AiService {
                 operation: { type: 'STRING', enum: ['_sum', '_avg', '_count'], description: 'Operación matemática.' },
                 field: { type: 'STRING', description: 'Campo numérico (ej: total, stock, price).' },
                 where: { type: 'OBJECT', description: 'Filtros de Prisma (opcional).' }
+              }
+            }
+          },
+          {
+            name: 'create_invoice_draft',
+            description: 'Redacta un borrador de factura para un cliente si el usuario lo pide.',
+            parameters: {
+              type: 'OBJECT',
+              properties: {
+                clientName: { type: 'STRING', description: 'Nombre del cliente.' },
+                items: { type: 'STRING', description: 'Descripción de los ítems a facturar.' },
+              }
+            }
+          },
+          {
+            name: 'draft_email',
+            description: 'Redacta un correo electrónico de cobro o de negocios.',
+            parameters: {
+              type: 'OBJECT',
+              properties: {
+                recipient: { type: 'STRING', description: 'Destinatario del correo.' },
+                subject: { type: 'STRING', description: 'Asunto del correo.' },
+                body: { type: 'STRING', description: 'Cuerpo sugerido.' }
               }
             }
           }
@@ -232,6 +255,24 @@ export class AiService {
           select: { name: true, stock: true, sku: true, price: true }
         })
         return { products }
+      }
+
+      if (name === 'create_invoice_draft') {
+        const { clientName, items } = args;
+        return { 
+          status: 'draft_prepared', 
+          message: `He preparado un borrador de factura para ${clientName} con los items: ${items}.`,
+          suggestedAction: 'view_billing'
+        };
+      }
+
+      if (name === 'draft_email') {
+        const { recipient, subject, body } = args;
+        return { 
+          status: 'email_drafted', 
+          message: `Borrador listo para enviar a ${recipient}. Asunto: ${subject}.`,
+          body
+        };
       }
 
       return { error: 'Herramienta no reconocida' }
