@@ -34,4 +34,9 @@ export class AiController {
   health() {
     return this.aiService.checkHealth()
   }
+
+  @Get('insights')
+  getInsights(@TenantId() tenantId: string) {
+    return this.aiService.generateDashboardInsights(tenantId)
+  }
 }

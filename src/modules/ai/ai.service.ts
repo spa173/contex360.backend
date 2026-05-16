@@ -424,4 +424,28 @@ export class AiService {
       throw new Error(`Failed to translate: ${error.message}`)
     }
   }
+
+  async generateDashboardInsights(tenantId: string) {
+    try {
+      const stats = await this.analytics.getDashboardKpis(tenantId)
+      const model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+      
+      const prompt = `Actúa como un Analista de Negocios para Contex360 ERP. 
+      Basado en estos datos: Ventas Totales: ${stats.totalSales}, Alertas de Stock Bajo: ${stats.lowStockAlerts}.
+      Genera UN SOLO párrafo (máximo 150 caracteres) con un insight accionable y motivador para el dashboard. 
+      Usa un tono profesional pero cercano. 
+      Ejemplo: "Las ventas han subido un 10% hoy. Te recomiendo revisar el stock de pintura, está llegando al mínimo."`
+
+      const result = await model.generateContent(prompt)
+      return { 
+        insight: result.response.text().trim(),
+        stats
+      }
+    } catch (error) {
+      return { 
+        insight: "Estamos analizando tus datos para darte recomendaciones personalizadas.",
+        stats: null
+      }
+    }
+  }
 }
