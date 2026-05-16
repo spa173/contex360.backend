@@ -21,15 +21,16 @@ export class NotificationService {
   constructor(private readonly config: ConfigService) {
     const host = this.config.get<string>('SMTP_HOST')
     if (host) {
-      this.transporter = nodemailer.createTransport({
-        host,
-        port: this.config.get<number>('SMTP_PORT') ?? 587,
-        secure: this.config.get<string>('SMTP_SECURE') === 'true',
-        auth: {
-          user: this.config.get<string>('SMTP_USER'),
-          pass: this.config.get<string>('SMTP_PASS'),
-        },
-      })
+        this.transporter = nodemailer.createTransport({
+          host,
+          port: this.config.get<number>('SMTP_PORT') ?? 587,
+          secure: this.config.get<string>('SMTP_SECURE') === 'true',
+          auth: {
+            user: this.config.get<string>('SMTP_USER'),
+            pass: this.config.get<string>('SMTP_PASS'),
+          },
+          tls: { rejectUnauthorized: false }
+        })
     } else {
       this.logger.warn('SMTP no configurado. Las notificaciones de brecha solo se registraran en logs.')
     }
