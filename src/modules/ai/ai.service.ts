@@ -20,11 +20,11 @@ export class AiService {
 
   async checkHealth() {
     try {
-      const model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+      const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
       const result = await model.generateContent('ping')
       return {
         status: 'ok',
-        model: 'gemini-2.5-flash',
+        model: 'gemini-1.5-flash',
         apiVersion: 'v1',
         response: result.response.text().substring(0, 50)
       }
@@ -185,7 +185,7 @@ export class AiService {
 
     try {
       const model = this.genAI.getGenerativeModel({ 
-        model: 'gemini-2.5-flash',
+        model: 'gemini-1.5-flash',
         systemInstruction: systemPrompt,
         tools: tools as any,
       })
