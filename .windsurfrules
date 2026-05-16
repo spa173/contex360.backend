@@ -1,0 +1,6 @@
+# REGLAS DE SEGURIDAD Y PRIVACIDAD DE DATOS
+- NUNCA leas, analices ni expongas archivos de configuración locales que contengan credenciales, tales como: .env, .env.local, config.json o credenciales de bases de datos.
+- Si necesitas usar variables de entorno, pídemelas explícitamente en el chat o usa marcadores de posición (placeholders) como `TU_PASSWORD_AQUI`, pero jamás leas el valor real del archivo.
+- Ignora por completo cualquier archivo listado en el `.gitignore` del proyecto.
+- Tienes estrictamente prohibido leer, copiar o exponer cualquier tipo de credencial, clave de API, tokens de Supabase/Prisma, o contraseñas reales que se encuentren en archivos de configuración local. 
+- Si necesitas configurar variables, genera siempre un archivo de ejemplo tipo .env.example con valores vacíos.

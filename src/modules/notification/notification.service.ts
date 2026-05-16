@@ -21,16 +21,19 @@ export class NotificationService {
   constructor(private readonly config: ConfigService) {
     const host = this.config.get<string>('SMTP_HOST')
     if (host) {
-        this.transporter = nodemailer.createTransport({
-          host,
-          port: this.config.get<number>('SMTP_PORT') ?? 587,
-          secure: this.config.get<string>('SMTP_SECURE') === 'true',
-          auth: {
-            user: this.config.get<string>('SMTP_USER'),
-            pass: this.config.get<string>('SMTP_PASS'),
-          },
-          tls: { rejectUnauthorized: false }
-        })
+      const port = this.config.get<number>('SMTP_PORT') ?? 587
+      this.transporter = nodemailer.createTransport({
+        host,
+        port,
+        secure: port === 465,
+        auth: {
+          user: this.config.get<string>('SMTP_USER'),
+          pass: this.config.get<string>('SMTP_PASS'),
+        },
+        tls: {
+          rejectUnauthorized: false,
+        },
+      })
     } else {
       this.logger.warn('SMTP no configurado. Las notificaciones de brecha solo se registraran en logs.')
     }
@@ -123,11 +126,13 @@ export class NotificationService {
       </div>
     `
 
-    await this.transporter.sendMail({ from, to, subject, html }).catch((err) =>
-      this.logger.error(`Error enviando email genérico a ${to}: ${err.message}`),
-    )
-
-    this.logger.log(`Email genérico enviado a ${to}.`)
+    try {
+      await this.transporter.sendMail({ from, to, subject, html })
+      this.logger.log(`Email genérico enviado a ${to}.`)
+    } catch (err: any) {
+      this.logger.error(`Error enviando email genérico a ${to}: ${err.message}`)
+      throw new Error(`No se pudo enviar el correo: ${err.message}`)
+    }
   }
 
   private buildWelcomeEmailHtml(data: {
