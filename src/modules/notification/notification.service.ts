@@ -99,6 +99,36 @@ export class NotificationService {
     this.logger.log(`Credenciales de bienvenida enviadas a ${data.email}.`)
   }
 
+  async sendGenericEmail(to: string, subject: string, body: string): Promise<void> {
+    if (!this.transporter) {
+      this.logger.warn(`ENVIO EMAIL (sin transporter): ${to} | ${subject}`)
+      return
+    }
+
+    const from = this.config.get<string>('SMTP_FROM') ?? 'no-reply@contex360.com'
+    const html = `
+      <div style="font-family: sans-serif; padding: 24px; color: #1e293b; background: #f8fafc;">
+        <div style="max-width: 600px; margin: 0 auto; background: white; padding: 32px; border-radius: 12px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);">
+          <div style="margin-bottom: 24px; border-bottom: 2px solid #2563eb; padding-bottom: 12px;">
+            <h1 style="color: #2563eb; margin: 0; font-size: 24px;">Contex360 Assistant</h1>
+          </div>
+          <div style="white-space: pre-wrap; line-height: 1.7; font-size: 16px;">${body}</div>
+          <hr style="margin: 32px 0; border: none; border-top: 1px solid #e2e8f0;" />
+          <p style="font-size: 12px; color: #64748b; text-align: center;">
+            Este mensaje fue redactado y enviado por el Asistente Ejecutivo de Contex360 por solicitud de un administrador.<br/>
+            &copy; 2026 Contex360 Enterprise Suite
+          </p>
+        </div>
+      </div>
+    `
+
+    await this.transporter.sendMail({ from, to, subject, html }).catch((err) =>
+      this.logger.error(`Error enviando email genérico a ${to}: ${err.message}`),
+    )
+
+    this.logger.log(`Email genérico enviado a ${to}.`)
+  }
+
   private buildWelcomeEmailHtml(data: {
     email: string;
     name: string;

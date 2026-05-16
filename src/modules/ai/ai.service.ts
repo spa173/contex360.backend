@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { PrismaService } from '../database/prisma.service'
 import { AnalyticsService } from '../analytics/analytics.service'
+import { NotificationService } from '../notification/notification.service'
 import { PERSONAL_ASSISTANT_PROMPT } from './ai.prompts'
 
 @Injectable()
@@ -12,6 +13,7 @@ export class AiService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly analytics: AnalyticsService,
+    private readonly notification: NotificationService,
     private readonly config: ConfigService,
   ) {
     const apiKey = this.config.get<string>('GEMINI_API_KEY')
@@ -125,13 +127,25 @@ export class AiService {
           },
           {
             name: 'draft_email',
-            description: 'Redacta un correo electrónico de cobro o de negocios.',
+            description: 'Redacta un borrador de correo electrónico de cobro o de negocios. NO ENVÍA EL CORREO, solo lo prepara.',
             parameters: {
               type: 'OBJECT',
               properties: {
                 recipient: { type: 'STRING', description: 'Destinatario del correo.' },
                 subject: { type: 'STRING', description: 'Asunto del correo.' },
                 body: { type: 'STRING', description: 'Cuerpo sugerido.' }
+              }
+            }
+          },
+          {
+            name: 'send_email',
+            description: 'Envía un correo electrónico real a un destinatario. Úsalo solo cuando el usuario lo solicite explícitamente.',
+            parameters: {
+              type: 'OBJECT',
+              properties: {
+                recipient: { type: 'STRING', description: 'Email del destinatario.' },
+                subject: { type: 'STRING', description: 'Asunto del correo.' },
+                body: { type: 'STRING', description: 'Contenido del correo.' }
               }
             }
           },
@@ -314,8 +328,17 @@ export class AiService {
         const { recipient, subject, body } = args;
         return { 
           status: 'email_drafted', 
-          message: `Borrador listo para enviar a ${recipient}. Asunto: ${subject}.`,
+          message: `Borrador listo para enviar a ${recipient}. Asunto: ${subject}. El usuario puede pedirme enviarlo ahora mismo si lo desea.`,
           body
+        };
+      }
+
+      if (name === 'send_email') {
+        const { recipient, subject, body } = args;
+        await this.notification.sendGenericEmail(recipient, subject, body);
+        return { 
+          status: 'email_sent', 
+          message: `El correo electrónico ha sido enviado exitosamente a ${recipient}.`,
         };
       }
 
