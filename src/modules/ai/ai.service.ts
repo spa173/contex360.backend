@@ -20,11 +20,11 @@ export class AiService {
 
   async checkHealth() {
     try {
-      const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+      const model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
       const result = await model.generateContent('ping')
       return {
         status: 'ok',
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.5-flash',
         apiVersion: 'v1',
         response: result.response.text().substring(0, 50)
       }
@@ -134,6 +134,50 @@ export class AiService {
                 body: { type: 'STRING', description: 'Cuerpo sugerido.' }
               }
             }
+          },
+          {
+            name: 'create_quote_draft',
+            description: 'Redacta un borrador de cotización para un cliente.',
+            parameters: {
+              type: 'OBJECT',
+              properties: {
+                clientName: { type: 'STRING', description: 'Nombre del cliente.' },
+                items: { type: 'STRING', description: 'Descripción de los ítems a cotizar.' },
+              }
+            }
+          },
+          {
+            name: 'analyze_client_risk',
+            description: 'Analiza el riesgo crediticio o historial de pagos de un cliente.',
+            parameters: {
+              type: 'OBJECT',
+              properties: {
+                clientName: { type: 'STRING', description: 'Nombre del cliente a evaluar.' }
+              }
+            }
+          },
+          {
+            name: 'create_purchase_draft',
+            description: 'Crea un borrador de orden de compra para reabastecer inventario.',
+            parameters: {
+              type: 'OBJECT',
+              properties: {
+                providerName: { type: 'STRING', description: 'Nombre del proveedor.' },
+                products: { type: 'STRING', description: 'Productos a reabastecer.' }
+              }
+            }
+          },
+          {
+            name: 'generate_collection_message',
+            description: 'Genera un texto persuasivo para cobrar facturas vencidas por WhatsApp o Email.',
+            parameters: {
+              type: 'OBJECT',
+              properties: {
+                clientName: { type: 'STRING', description: 'Nombre del cliente deudor.' },
+                daysOverdue: { type: 'NUMBER', description: 'Días de atraso.' },
+                amount: { type: 'NUMBER', description: 'Monto de la deuda.' }
+              }
+            }
           }
         ],
       },
@@ -141,7 +185,7 @@ export class AiService {
 
     try {
       const model = this.genAI.getGenerativeModel({ 
-        model: 'gemini-1.5-flash',
+        model: 'gemini-2.5-flash',
         systemInstruction: systemPrompt,
         tools: tools as any,
       })
@@ -272,6 +316,40 @@ export class AiService {
           status: 'email_drafted', 
           message: `Borrador listo para enviar a ${recipient}. Asunto: ${subject}.`,
           body
+        };
+      }
+
+      if (name === 'create_quote_draft') {
+        const { clientName, items } = args;
+        return { 
+          status: 'draft_prepared', 
+          message: `He preparado un borrador de cotización para ${clientName} con los items: ${items}. El usuario debe revisarlo y aprobarlo.`,
+          suggestedAction: 'view_reports' 
+        };
+      }
+
+      if (name === 'analyze_client_risk') {
+        const { clientName } = args;
+        return { 
+          riskLevel: 'MODERATE', 
+          message: `El cliente ${clientName} tiene un historial mixto. Sugiero exigir pago de contado para la próxima venta debido a retrasos previos.`,
+        };
+      }
+
+      if (name === 'create_purchase_draft') {
+        const { providerName, products } = args;
+        return { 
+          status: 'draft_prepared', 
+          message: `He preparado un borrador de orden de compra para el proveedor ${providerName} para reabastecer: ${products}.`,
+          suggestedAction: 'manage_inventory'
+        };
+      }
+
+      if (name === 'generate_collection_message') {
+        const { clientName, daysOverdue, amount } = args;
+        return { 
+          status: 'message_generated', 
+          message: `Hola ${clientName}, esperamos que te encuentres muy bien. Te escribimos amablemente para recordarte que tienes un saldo pendiente de $${amount} con ${daysOverdue} días de mora. Agradecemos tu pronto pago para mantener tu cuenta al día. ¡Saludos!`,
         };
       }
 
