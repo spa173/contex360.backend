@@ -27,7 +27,7 @@ export class LedgerService {
     })
   }
 
-  async create(tenantId: string, dto: CreateLedgerEntryDto) {
+  async create(tenantId: string, dto: CreateLedgerEntryDto, tx?: any) {
     if (!dto.lines || dto.lines.length === 0) {
       throw new BadRequestException('El asiento debe tener al menos una línea')
     }
@@ -41,7 +41,8 @@ export class LedgerService {
       )
     }
 
-    return this.prisma.ledgerEntry.create({
+    const prisma = tx ?? this.prisma
+    return prisma.ledgerEntry.create({
       data: {
         tenantId,
         referenceType: dto.referenceType,

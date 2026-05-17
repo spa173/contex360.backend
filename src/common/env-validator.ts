@@ -4,7 +4,9 @@ const logger = new Logger('EnvValidator');
 
 const REQUIRED_ENV_VARS = [
   'DATABASE_URL',
+  'DIRECT_URL',
   'JWT_SECRET',
+  'CORS_ORIGIN',
 ];
 
 export function validateEnv() {

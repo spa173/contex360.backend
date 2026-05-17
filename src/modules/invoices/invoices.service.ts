@@ -88,7 +88,14 @@ export class InvoicesService {
       const dueAt = new Date(issuedAt)
       dueAt.setDate(dueAt.getDate() + (data.paymentTermDays || 30))
 
-      // 3. Create Invoice
+      // 3. Pre-fetch all products to resolve names and costs
+      const productMap = new Map<string, any>()
+      for (const item of data.items) {
+        const product = await tx.product.findUnique({ where: { id: item.productId } })
+        if (!product) throw new NotFoundException(`Producto ${item.productId} no encontrado`)
+        productMap.set(item.productId, product)
+      }
+
       const invoice = await tx.invoice.create({
         data: {
           tenantId,
@@ -100,19 +107,22 @@ export class InvoicesService {
           subtotal,
           taxTotal,
           total,
-          status: InvoiceStatus.emitted, // We emit immediately in this version
+          status: InvoiceStatus.emitted,
           items: {
-            create: data.items.map((item, index) => ({
-              productId: item.productId,
-              lineNumber: index + 1,
-              productName: 'Product Name', // Ideally fetch this from product table
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              unitCost: 0, // Should fetch from product cost
-              taxRate: item.taxRate,
-              subtotal: item.unitPrice * item.quantity,
-              taxAmount: item.unitPrice * item.quantity * (item.taxRate / 100),
-            })),
+            create: data.items.map((item, index) => {
+              const product = productMap.get(item.productId)
+              return {
+                productId: item.productId,
+                lineNumber: index + 1,
+                productName: product.name,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                unitCost: Number(product.cost),
+                taxRate: item.taxRate,
+                subtotal: item.unitPrice * item.quantity,
+                taxAmount: item.unitPrice * item.quantity * (item.taxRate / 100),
+              }
+            }),
           },
         },
         include: { items: true },
@@ -120,8 +130,7 @@ export class InvoicesService {
 
       // 4. Update Stock and create Inventory Movements
       for (const item of data.items) {
-        const product = await tx.product.findUnique({ where: { id: item.productId } })
-        if (!product) throw new NotFoundException(`Producto ${item.productId} no encontrado`)
+        const product = productMap.get(item.productId)
 
         if (product.isInventoriable) {
           if (!tenant.allowNegativeStock && product.stock < item.quantity) {
@@ -155,39 +164,35 @@ export class InvoicesService {
   }
 
   async updateStatus(tenantId: string, id: string, status: InvoiceStatus) {
-    const invoice = await this.findOne(tenantId, id)
-
-    const updated = await this.prisma.invoice.update({
-      where: { id },
-      data: { status },
-      include: { items: true },
-    })
-
-    // When marked as accepted (paid), create cash-receipt ledger entry
-    if (status === InvoiceStatus.accepted) {
-      await this.ledger.create(tenantId, {
-        referenceType: 'payment_in',
-        referenceId: id,
-        description: `Cobro Factura ${invoice.number || id}`,
-        amount: Number(invoice.total),
-        lines: [
-          {
-            account: '110505',
-            label: 'Caja general',
-            debit: Number(invoice.total),
-            credit: 0,
-          },
-          {
-            account: '130505',
-            label: 'Clientes nacionales',
-            debit: 0,
-            credit: Number(invoice.total),
-          },
-        ],
+    return this.prisma.$transaction(async (tx) => {
+      const invoice = await tx.invoice.findFirst({
+        where: { id, tenantId },
+        include: { client: true, items: true },
       })
-    }
 
-    return updated
+      if (!invoice) throw new NotFoundException('Factura no encontrada')
+
+      const updated = await tx.invoice.update({
+        where: { id },
+        data: { status },
+        include: { items: true },
+      })
+
+      if (status === InvoiceStatus.accepted) {
+        await this.ledger.create(tenantId, {
+          referenceType: 'payment_in',
+          referenceId: id,
+          description: `Cobro Factura ${invoice.number || id}`,
+          amount: Number(invoice.total),
+          lines: [
+            { account: '110505', label: 'Caja general', debit: Number(invoice.total), credit: 0 },
+            { account: '130505', label: 'Clientes nacionales', debit: 0, credit: Number(invoice.total) },
+          ],
+        }, tx)
+      }
+
+      return updated
+    })
   }
 
   async remove(tenantId: string, id: string) {

@@ -15,19 +15,18 @@ export class AnalyticsService {
         where: { tenantId },
         _sum: { stock: true },
       }),
-      this.prisma.product.count({
-        where: {
-          tenantId,
-          isInventoriable: true,
-          stock: { lt: this.prisma.product.fields.minStock },
-        },
-      }),
+      this.prisma.$queryRaw<[{ count: bigint }]>`
+        SELECT COUNT(*)::int AS count FROM "Product"
+        WHERE "tenantId" = ${tenantId}
+          AND "isInventoriable" = true
+          AND stock < "minStock"
+      `,
     ])
 
     return {
       totalSales: totalSales._sum.total || 0,
       totalStockItems: stockStats._sum.stock || 0,
-      lowStockAlerts: lowStockCount,
+      lowStockAlerts: Number(lowStockCount[0]?.count ?? 0),
     }
   }
 

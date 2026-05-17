@@ -28,8 +28,12 @@ export class QuotesService {
   }
 
   private async generateQuoteNumber(tx: any, tenantId: string): Promise<string> {
-    const count = await tx.quote.count({ where: { tenantId } })
-    return `CT-${String(count + 1).padStart(6, '0')}`
+    const [row] = await tx.$queryRaw<[{ count: bigint }]>`
+      SELECT COUNT(*) AS count FROM "Quote"
+      WHERE "tenantId" = ${tenantId}
+      FOR UPDATE
+    `
+    return `CT-${String(Number(row.count) + 1).padStart(6, '0')}`
   }
 
   async create(tenantId: string, data: {
@@ -112,48 +116,45 @@ export class QuotesService {
   }
 
   async convertToInvoice(tenantId: string, id: string, invoicesService: any) {
-    return this.prisma.$transaction(async (tx) => {
-      const quote = await tx.quote.findFirst({
-        where: { id, tenantId },
-        include: { items: true, client: true },
-      })
-
-      if (!quote) {
-        throw new NotFoundException('Cotización no encontrada')
-      }
-
-      if (quote.status === QuoteStatus.converted) {
-        throw new BadRequestException('La cotización ya fue convertida a factura')
-      }
-
-      if (quote.status !== QuoteStatus.accepted) {
-        throw new BadRequestException('Solo cotizaciones aceptadas pueden convertirse')
-      }
-
-      // Create invoice from quote data
-      const invoice = await invoicesService.create(tenantId, {
-        clientId: quote.clientId!,
-        paymentTermDays: 30,
-        notes: `Convertido de cotización ${quote.number}. ${quote.notes || ''}`,
-        items: quote.items.map(item => ({
-          productId: item.productId!,
-          quantity: item.quantity,
-          unitPrice: Number(item.unitPrice),
-          taxRate: Number(item.taxRate),
-        })),
-      })
-
-      // Update quote status and link to invoice
-      await tx.quote.update({
-        where: { id },
-        data: {
-          status: QuoteStatus.converted,
-          convertedToInvoiceId: invoice.id,
-        },
-      })
-
-      return { quote: await this.findOne(tenantId, id), invoice }
+    const quote = await this.prisma.quote.findFirst({
+      where: { id, tenantId },
+      include: { items: true, client: true },
     })
+
+    if (!quote) {
+      throw new NotFoundException('Cotización no encontrada')
+    }
+
+    if (quote.status === QuoteStatus.converted) {
+      throw new BadRequestException('La cotización ya fue convertida a factura')
+    }
+
+    if (quote.status !== QuoteStatus.accepted) {
+      throw new BadRequestException('Solo cotizaciones aceptadas pueden convertirse')
+    }
+
+    // invoicesService.create has its own $transaction — cannot nest
+    const invoice = await invoicesService.create(tenantId, {
+      clientId: quote.clientId!,
+      paymentTermDays: 30,
+      notes: `Convertido de cotización ${quote.number}. ${quote.notes || ''}`,
+      items: quote.items.map(item => ({
+        productId: item.productId!,
+        quantity: item.quantity,
+        unitPrice: Number(item.unitPrice),
+        taxRate: Number(item.taxRate),
+      })),
+    })
+
+    await this.prisma.quote.update({
+      where: { id },
+      data: {
+        status: QuoteStatus.converted,
+        convertedToInvoiceId: invoice.id,
+      },
+    })
+
+    return { quote: await this.findOne(tenantId, id), invoice }
   }
 
   async remove(tenantId: string, id: string) {
