@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common'
+import { APP_INTERCEPTOR } from '@nestjs/core'
 import { ConfigModule } from '@nestjs/config'
 import { ThrottlerModule } from '@nestjs/throttler'
 import { ScheduleModule } from '@nestjs/schedule'
 import { AppController } from './app.controller'
 import { AppService } from './app.service'
+import { RlsContextInterceptor } from './common/interceptors/rls-context.interceptor'
 import { AuthModule } from './modules/auth/auth.module'
 import { PrismaModule } from './modules/database/prisma.module'
 import { HealthModule } from './modules/health/health.module'
@@ -55,6 +57,7 @@ import { QuotesModule } from './modules/quotes/quotes.module'
   controllers: [AppController],
   providers: [
     AppService,
+    { provide: APP_INTERCEPTOR, useClass: RlsContextInterceptor },
     // Comentado temporalmente el guard global para descartar bloqueos de CORS por Throttling
     // { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
