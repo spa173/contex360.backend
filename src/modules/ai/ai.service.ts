@@ -270,7 +270,7 @@ export class AiService {
     const formattedTime = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
     let liveData = ''
     const lowerMsg = message.toLowerCase()
-    const isErpQuery = lowerMsg.includes('venta') || lowerMsg.includes('vendim') || lowerMsg.includes('factura') || lowerMsg.includes('inventario') || lowerMsg.includes('stock') || lowerMsg.includes('producto') || lowerMsg.includes('cliente') || lowerMsg.includes('proveedor') || lowerMsg.includes('cotiza') || lowerMsg.includes('compra') || lowerMsg.includes('tesoreria') || lowerMsg.includes('ingreso') || lowerMsg.includes('gasto') || lowerMsg.includes('empresa') || lowerMsg.includes('tenant') || lowerMsg.includes('balance') || lowerMsg.includes('cuanto') || lowerMsg.includes('cuales')
+    const isErpQuery = lowerMsg.includes('venta') || lowerMsg.includes('vendim') || lowerMsg.includes('factura') || lowerMsg.includes('inventario') || lowerMsg.includes('stock') || lowerMsg.includes('producto') || lowerMsg.includes('cliente') || lowerMsg.includes('proveedor') || lowerMsg.includes('cotiza') || lowerMsg.includes('compra') || lowerMsg.includes('tesoreria') || lowerMsg.includes('ingreso') || lowerMsg.includes('gasto') || lowerMsg.includes('empresa') || lowerMsg.includes('tenant') || lowerMsg.includes('balance') || lowerMsg.includes('cuanto') || lowerMsg.includes('cuales') || lowerMsg.includes('usuario') || lowerMsg.includes('colaborador') || lowerMsg.includes('empleado') || lowerMsg.includes('equipo') || lowerMsg.includes('persona')
 
     if (lowerMsg.includes('dolar') || lowerMsg.includes('dólar') || lowerMsg.includes('divisa') || lowerMsg.includes('trm') || lowerMsg.includes('euro') || lowerMsg.includes('cotizacion') || lowerMsg.includes('cambio') || lowerMsg.includes('precio') || lowerMsg.includes('moneda')) {
       try {
@@ -284,8 +284,15 @@ export class AiService {
       }
     } else if (isErpQuery) {
       try {
-        const stats = await this.analytics.getDashboardKpis(tenantId)
-        liveData = `[DATOS INTERNOS DE EMPRESA ERP (HOY)]: Ventas totales acumuladas: $${Number(stats.totalSales || 0).toLocaleString('es-CO')} COP. Alertas de inventario bajo: ${stats.lowStockAlerts || 0}. Productos registrados en catálogo y en bodega. DEBES responder al usuario informando exactamente estas cifras de ventas de la empresa.`
+        const [stats, memberships] = await Promise.all([
+          this.analytics.getDashboardKpis(tenantId),
+          this.prisma.membership.findMany({
+            where: { tenantId },
+            include: { user: { select: { name: true, email: true, title: true } } },
+          }),
+        ])
+        const userListStr = memberships.map(m => `${m.user.name || m.user.email} (${m.role})`).join(', ')
+        liveData = `[DATOS INTERNOS DE EMPRESA ERP (HOY)]: Ventas totales acumuladas: $${Number(stats.totalSales || 0).toLocaleString('es-CO')} COP. Alertas de inventario bajo: ${stats.lowStockAlerts || 0}. Usuarios/colaboradores activos en la empresa: ${memberships.length} en total (${userListStr}). DEBES responder al usuario de forma ejecutiva informando exactamente estas cifras y datos de la empresa.`
       } catch (e) {
         liveData = `Base de datos ERP conectada para empresa ${tenantId}.`
       }
@@ -310,8 +317,8 @@ export class AiService {
       .map(h => {
         let content = Array.isArray(h.parts) ? (h.parts[0]?.text ?? '') : (h.content ?? '')
         if (h.role === 'model' || h.role === 'assistant') {
-          if (content.toLowerCase().includes('no puedo') || content.toLowerCase().includes('no tengo acceso') || content.toLowerCase().includes('lamentablemente') || content.toLowerCase().includes('lo siento') || content.toLowerCase().includes('mi sistema no tiene')) {
-            content = '¡Claro que sí! Conectando con los mercados financieros en tiempo real, te confirmo la cotización exacta en vivo hoy.'
+          if (content.toLowerCase().includes('no puedo') || content.toLowerCase().includes('no tengo acceso') || content.toLowerCase().includes('lamentablemente') || content.toLowerCase().includes('lo siento') || content.toLowerCase().includes('mi sistema no tiene') || content.toLowerCase().includes('error del cerebro ia')) {
+            content = '¡Claro que sí! Conectando con los datos en tiempo real, te confirmo la información exacta.'
           }
         }
         return {
@@ -352,13 +359,18 @@ export class AiService {
           model: MODEL,
           messages: [
             ...messages,
-            responseMessage,
+            {
+              role: 'assistant',
+              content: responseMessage.content || '',
+              tool_calls: responseMessage.tool_calls,
+            },
             {
               role: 'tool',
               tool_call_id: toolCall.id,
               content: JSON.stringify(functionResult),
             },
           ],
+          tools: TOOLS,
           max_tokens: 1024,
         })
 
