@@ -279,7 +279,7 @@ export class AiService {
     if (attachment && attachment.startsWith('data:image/')) {
       try {
         const visionRes = await this.groq.chat.completions.create({
-          model: 'llama-3.2-90b-vision-preview',
+          model: 'meta-llama/llama-4-scout-17b-16e-instruct',
           messages: [
             {
               role: 'user',
@@ -293,27 +293,8 @@ export class AiService {
         })
         extractedVisionContent = visionRes.choices[0]?.message?.content || ''
       } catch (e: any) {
-        console.error('Groq 90b vision error:', e?.response?.data || e.message || e)
-        try {
-          // fallback to 11b-vision
-          const visionRes11 = await this.groq.chat.completions.create({
-            model: 'llama-3.2-11b-vision-preview',
-            messages: [
-              {
-                role: 'user',
-                content: [
-                  { type: 'text', text: 'Realiza un análisis OCR detallado de esta imagen o factura.' },
-                  { type: 'image_url', image_url: { url: attachment } }
-                ]
-              }
-            ],
-            max_tokens: 1024,
-          })
-          extractedVisionContent = visionRes11.choices[0]?.message?.content || ''
-        } catch (err2: any) {
-          console.error('Groq 11b vision error:', err2?.response?.data || err2.message || err2)
-          extractedVisionContent = '[AVISO DE VISIÓN OCR]: No se pudo completar el análisis OCR de la imagen en los servidores de IA debido a que excedía las dimensiones o el formato soportado.'
-        }
+        console.error('Groq Llama 4 Scout vision error:', e?.response?.data || e.message || e)
+        extractedVisionContent = '[ERROR DE VISIÓN OCR]: No se pudo completar el análisis OCR de la imagen en los servidores de IA.'
       }
     } else if (attachment && attachment.startsWith('data:application/pdf')) {
       try {
