@@ -13,9 +13,20 @@ import { validateEnv } from './common/env-validator'
 
 const logger = new Logger('Bootstrap')
 
+let appInstance: any = null
+
 export async function bootstrap() {
+  if (appInstance) {
+    try {
+      await appInstance.close()
+    } catch (e) {
+      // ignore
+    }
+  }
+
   validateEnv()
   const app = await NestFactory.create(AppModule)
+  appInstance = app
   const configService = app.get(ConfigService)
 
   app.use(json({ limit: '50mb' }))
@@ -55,8 +66,12 @@ export async function bootstrap() {
     .addBearerAuth()
     .build()
 
-  const document = SwaggerModule.createDocument(app, swaggerConfig)
-  SwaggerModule.setup(swaggerPath, app, document)
+  try {
+    const document = SwaggerModule.createDocument(app, swaggerConfig)
+    SwaggerModule.setup(swaggerPath, app, document)
+  } catch (error: any) {
+    logger.warn(`Failed to generate Swagger documentation: ${error.message}`)
+  }
 
   // Solo hacemos listen si NO estamos en entorno de Vite (donde Vite maneja el servidor)
   if (!process.env.VITE) {
@@ -75,5 +90,19 @@ if (!process.env.VITE) {
     const message = error instanceof Error ? error.stack ?? error.message : String(error)
     logger.error('Failed to start backend', message)
     process.exit(1)
+  })
+}
+
+// @ts-ignore
+if (import.meta.hot) {
+  // @ts-ignore
+  import.meta.hot.dispose(async () => {
+    if (appInstance) {
+      try {
+        await appInstance.close()
+      } catch (e) {
+        // ignore
+      }
+    }
   })
 }
