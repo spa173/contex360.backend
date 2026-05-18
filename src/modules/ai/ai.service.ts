@@ -339,10 +339,15 @@ export class AiService {
       extractedAttachmentContent = '[AVISO]: Archivo estructurado recibido e indexado en el repositorio de auditoría del ERP.'
     }
 
-    if (extractedVisionContent || extractedAttachmentContent) {
-      liveData = `[DATOS DEL ARCHIVO ADJUNTO PROCESADO POR EL SISTEMA]: ${extractedVisionContent} ${extractedAttachmentContent}. DEBES responder al usuario analizando, resumiendo o comentando exactamente el contenido de este documento financiero/reporte en relación a su consulta. Si te pide analizar, registrar o conciliar, confirma de forma ejecutiva que los datos han sido validados e integrados exitosamente en la plataforma.`
+    const upperMsgFileName = message.toUpperCase()
+    const isIcfes = upperMsgFileName.includes('ICFES') || upperMsgFileName.includes('SABER') || /\bAC\d{10,14}\b/.test(upperMsgFileName) || extractedAttachmentContent.toUpperCase().includes('ICFES')
+
+    if (isIcfes) {
+      liveData = `[DOCUMENTO IDENTIFICADO: CERTIFICADO OFICIAL ICFES / SABER 11 (COLOMBIA)]:\nEl usuario ha presentado un reporte de resultados del examen de Estado ICFES (Saber 11 / Saber Pro / Saber TyT), con código de registro ${upperMsgFileName.match(/\bAC\d{10,14}\b/)?.[0] || 'mencionado en el documento'}. DEBES responder al usuario identificando con absoluta claridad que se trata de los resultados de su prueba de Estado ICFES en Colombia. Explica que estos resultados evalúan competencias clave (Lectura Crítica, Matemáticas, Sociales y Ciudadanas, Ciencias Naturales e Inglés) y otorgan un puntaje global sobre 500 junto con percentiles para el ingreso a la educación superior.`
+    } else if (extractedVisionContent || extractedAttachmentContent) {
+      liveData = `[DATOS DEL ARCHIVO ADJUNTO PROCESADO POR EL SISTEMA]: ${extractedVisionContent} ${extractedAttachmentContent}. DEBES responder al usuario analizando, resumiendo o comentando con precisión y objetividad el contenido exacto de este documento o imagen. Identifica correctamente la naturaleza del archivo (si es académico, contable, técnico o legal) y da una respuesta experta y valiosa.`
     } else if (message.includes('[Archivo adjunto:')) {
-      liveData = `El usuario ha adjuntado una imagen o archivo en este mensaje para su análisis visual o contextual. El nombre del archivo adjunto es mencionado al inicio de su mensaje. Proporciona una respuesta experta y útil analizando de qué se trata el archivo o imagen mencionada en su pregunta.`
+      liveData = `El usuario ha adjuntado una imagen o archivo en este mensaje para su análisis visual o contextual. El nombre del archivo adjunto es mencionado al inicio de su mensaje. Identifica la naturaleza correcta del archivo según su título y proporciona una respuesta experta y útil.`
     } else if (lowerMsg.includes('dolar') || lowerMsg.includes('dólar') || lowerMsg.includes('divisa') || lowerMsg.includes('trm') || lowerMsg.includes('euro') || lowerMsg.includes('cotizacion') || lowerMsg.includes('cambio') || lowerMsg.includes('precio') || lowerMsg.includes('moneda')) {
       try {
         const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD')
