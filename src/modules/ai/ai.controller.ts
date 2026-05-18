@@ -17,10 +17,11 @@ export class AiController {
     @TenantId() tenantId: string, 
     @AuthUser() user: AuthTokenPayload,
     @Body('message') message: string,
-    @Body('history') history: any[]
+    @Body('history') history: any[],
+    @Body('attachment') attachment?: string
   ) {
     const userName = user.email ? user.email.split('@')[0] : 'Usuario'
-    return this.aiService.processChat(tenantId, userName, user.isSystemOwner, message, history)
+    return this.aiService.processChat(tenantId, userName, user.isSystemOwner, message, history, attachment)
   }
 
   @Post('translate')

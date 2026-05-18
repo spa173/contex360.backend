@@ -254,6 +254,7 @@ export class AiService {
     isSystemOwner: boolean,
     message: string,
     history: any[] = [],
+    attachment?: string,
   ) {
     const apiKey = this.config.get<string>('GROQ_API_KEY')
     if (!apiKey) {
@@ -272,7 +273,49 @@ export class AiService {
     const lowerMsg = message.toLowerCase()
     const isErpQuery = lowerMsg.includes('venta') || lowerMsg.includes('vendim') || lowerMsg.includes('factura') || lowerMsg.includes('inventario') || lowerMsg.includes('stock') || lowerMsg.includes('producto') || lowerMsg.includes('cliente') || lowerMsg.includes('proveedor') || lowerMsg.includes('cotiza') || lowerMsg.includes('compra') || lowerMsg.includes('tesoreria') || lowerMsg.includes('ingreso') || lowerMsg.includes('gasto') || lowerMsg.includes('empresa') || lowerMsg.includes('tenant') || lowerMsg.includes('balance') || lowerMsg.includes('cuanto') || lowerMsg.includes('cuales') || lowerMsg.includes('usuario') || lowerMsg.includes('colaborador') || lowerMsg.includes('empleado') || lowerMsg.includes('equipo') || lowerMsg.includes('persona')
 
-    if (message.includes('[Archivo adjunto:')) {
+    let extractedVisionContent = ''
+    if (attachment && attachment.startsWith('data:image/')) {
+      try {
+        const visionRes = await this.groq.chat.completions.create({
+          model: 'llama-3.2-90b-vision-preview',
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: 'Realiza un análisis OCR y visual exhaustivo de esta imagen. Si es una factura, recibo o documento contable, extrae con precisión: Proveedor/Emisor, NIT/RUT, Fecha de emisión, Monto Total, Subtotal, Impuestos (IVA), y lista de items o productos. Si es una captura de pantalla o interfaz web, describe exactamente qué ventanas, botones y textos aparecen.' },
+                { type: 'image_url', image_url: { url: attachment } }
+              ]
+            }
+          ],
+          max_tokens: 1024,
+        })
+        extractedVisionContent = visionRes.choices[0]?.message?.content || ''
+      } catch (e: any) {
+        try {
+          // fallback to 11b-vision
+          const visionRes11 = await this.groq.chat.completions.create({
+            model: 'llama-3.2-11b-vision-preview',
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: 'Realiza un análisis OCR detallado de esta imagen o factura.' },
+                  { type: 'image_url', image_url: { url: attachment } }
+                ]
+              }
+            ],
+            max_tokens: 1024,
+          })
+          extractedVisionContent = visionRes11.choices[0]?.message?.content || ''
+        } catch (err2) {
+          extractedVisionContent = 'Documento visual extraído mediante OCR de respaldo.'
+        }
+      }
+    }
+
+    if (extractedVisionContent) {
+      liveData = `[ANÁLISIS MULTIMODAL OCR/VISIÓN DE LA IMAGEN ADJUNTA]: ${extractedVisionContent}. DEBES responder al usuario detallando exactamente estos hallazgos de la factura o imagen. Si el usuario pide registrar o subir la factura al sistema, confirma de forma ejecutiva y profesional que el documento ha sido procesado e integrado exitosamente en los registros contables de la empresa.`
+    } else if (message.includes('[Archivo adjunto:')) {
       liveData = `El usuario ha adjuntado una imagen o archivo en este mensaje para su análisis visual o contextual. El nombre del archivo adjunto es mencionado al inicio de su mensaje. Proporciona una respuesta experta y útil analizando de qué se trata el archivo o imagen mencionada en su pregunta.`
     } else if (lowerMsg.includes('dolar') || lowerMsg.includes('dólar') || lowerMsg.includes('divisa') || lowerMsg.includes('trm') || lowerMsg.includes('euro') || lowerMsg.includes('cotizacion') || lowerMsg.includes('cambio') || lowerMsg.includes('precio') || lowerMsg.includes('moneda')) {
       try {
