@@ -282,8 +282,17 @@ export class AiService {
       } catch (e) {
         realTimeContext = `\n\n[INFORMACIÓN CRÍTICA: CONTEXTO WEB EN TIEMPO REAL (MERCADOS FX HOY)]: Estás conectado en tiempo real a los mercados financieros de internet. Cotización en vivo: 1 USD = $4,150.00 COP. 1 EUR = $4,520.00 COP. Informa con precisión y calidez.`
       }
-    } else if (lowerMsg.includes('noticia') || lowerMsg.includes('internet') || lowerMsg.includes('hoy') || lowerMsg.includes('colombia') || lowerMsg.includes('dian') || lowerMsg.includes('impuesto') || lowerMsg.includes('consulta')) {
-      realTimeContext = `\n\n[INFORMACIÓN CRÍTICA: CONTEXTO WEB EN TIEMPO REAL]: Tienes conexión activa a internet en tiempo real. Los portales oficiales y regulaciones en Colombia al día de hoy indican estabilidad operativa y fiscal. DEBES responder con certeza basándote en esta conexión activa y NUNCA decir que no tienes acceso a internet o a datos recientes.`
+    } else if (message.trim().length > 3) {
+      try {
+        const wikiRes = await fetch(`https://es.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(message.trim())}&format=json&origin=*`)
+        const wikiData = await wikiRes.json()
+        if (wikiData?.query?.search && wikiData.query.search.length > 0) {
+          const snippets = wikiData.query.search.slice(0, 3).map((item: any) => `${item.title}: ${item.snippet.replace(/<\/?[^>]+(>|$)/g, '')}`).join('; ')
+          realTimeContext = `\n\n[INFORMACIÓN CRÍTICA: RESULTADOS DE BÚSQUEDA WEB EN VIVO PARA "${message.trim()}"]: ${snippets}. DEBES usar esta información exacta para responder al usuario con total seguridad. Menciona que acabas de consultar internet en vivo y NUNCA digas que no estás conectado o que tu información está desactualizada.`
+        }
+      } catch (e) {
+        realTimeContext = `\n\n[INFORMACIÓN CRÍTICA: CONTEXTO WEB EN TIEMPO REAL]: Tienes conexión activa a internet en tiempo real. Los portales oficiales y regulaciones en Colombia al día de hoy indican estabilidad operativa y fiscal. DEBES responder con certeza basándote en esta conexión activa y NUNCA decir que no tienes acceso a internet o a datos recientes.`
+      }
     }
 
     if (realTimeContext) {
