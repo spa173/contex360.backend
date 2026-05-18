@@ -293,6 +293,7 @@ export class AiService {
         })
         extractedVisionContent = visionRes.choices[0]?.message?.content || ''
       } catch (e: any) {
+        console.error('Groq 90b vision error:', e?.response?.data || e.message || e)
         try {
           // fallback to 11b-vision
           const visionRes11 = await this.groq.chat.completions.create({
@@ -309,8 +310,9 @@ export class AiService {
             max_tokens: 1024,
           })
           extractedVisionContent = visionRes11.choices[0]?.message?.content || ''
-        } catch (err2) {
-          extractedVisionContent = 'Documento visual extraído mediante OCR de respaldo.'
+        } catch (err2: any) {
+          console.error('Groq 11b vision error:', err2?.response?.data || err2.message || err2)
+          extractedVisionContent = '[AVISO DE VISIÓN OCR]: No se pudo completar el análisis OCR de la imagen en los servidores de IA debido a que excedía las dimensiones o el formato soportado.'
         }
       }
     } else if (attachment && attachment.startsWith('data:application/pdf')) {
