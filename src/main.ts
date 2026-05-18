@@ -7,6 +7,8 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { AppModule } from './app.module'
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor'
 
+import { json, urlencoded } from 'express'
+
 import { validateEnv } from './common/env-validator'
 
 const logger = new Logger('Bootstrap')
@@ -15,6 +17,9 @@ export async function bootstrap() {
   validateEnv()
   const app = await NestFactory.create(AppModule)
   const configService = app.get(ConfigService)
+
+  app.use(json({ limit: '50mb' }))
+  app.use(urlencoded({ extended: true, limit: '50mb' }))
   
   const corsOrigin = configService.get<string>('CORS_ORIGIN')
   const allowedOrigins = corsOrigin ? corsOrigin.split(',') : true
