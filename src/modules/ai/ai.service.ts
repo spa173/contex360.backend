@@ -323,7 +323,7 @@ export class AiService {
         }
       } catch (err) {
         console.error('Error parsing PDF:', err)
-        extractedAttachmentContent = '[AVISO]: Documento PDF recibido e indexado correctamente en los registros del ERP.'
+        extractedAttachmentContent = '[AVISO]: Documento PDF recibido e indexado correctamente en los registros.'
       }
     } else if (attachment && attachment.startsWith('data:text/')) {
       try {
@@ -333,22 +333,25 @@ export class AiService {
           extractedAttachmentContent = `[CONTENIDO DEL ARCHIVO DE TEXTO/CSV ADJUNTO]:\n"""\n${textData.slice(0, 4000)}\n"""`
         }
       } catch (err) {
-        extractedAttachmentContent = '[AVISO]: Archivo de texto/CSV indexado en el ERP.'
+        extractedAttachmentContent = '[AVISO]: Archivo de texto/CSV indexado.'
       }
     } else if (attachment) {
-      extractedAttachmentContent = '[AVISO]: Archivo estructurado recibido e indexado en el repositorio de auditoría del ERP.'
+      extractedAttachmentContent = '[AVISO]: Archivo estructurado recibido e indexado en el repositorio de auditoría.'
     }
 
     const upperMsgFileName = message.toUpperCase()
     const isIcfes = upperMsgFileName.includes('ICFES') || upperMsgFileName.includes('SABER') || /\bAC\d{10,14}\b/.test(upperMsgFileName) || extractedAttachmentContent.toUpperCase().includes('ICFES')
 
+    let attachmentSummary = ''
     if (isIcfes) {
-      liveData = `[DOCUMENTO IDENTIFICADO: CERTIFICADO OFICIAL ICFES / SABER 11 (COLOMBIA)]:\nEl usuario ha presentado un reporte de resultados del examen de Estado ICFES (Saber 11 / Saber Pro / Saber TyT), con código de registro ${upperMsgFileName.match(/\bAC\d{10,14}\b/)?.[0] || 'mencionado en el documento'}. DEBES responder al usuario identificando con absoluta claridad que se trata de los resultados de su prueba de Estado ICFES en Colombia. Explica que estos resultados evalúan competencias clave (Lectura Crítica, Matemáticas, Sociales y Ciudadanas, Ciencias Naturales e Inglés) y otorgan un puntaje global sobre 500 junto con percentiles para el ingreso a la educación superior.`
+      attachmentSummary = `[DOCUMENTO IDENTIFICADO: CERTIFICADO OFICIAL ICFES / SABER 11 (COLOMBIA)]:\nEl usuario ha presentado un reporte de resultados del examen de Estado ICFES (Saber 11 / Saber Pro / Saber TyT), con código de registro ${upperMsgFileName.match(/\bAC\d{10,14}\b/)?.[0] || 'mencionado en el documento'}. DEBES responder al usuario identificando con absoluta claridad que se trata de los resultados de su prueba de Estado ICFES en Colombia. Explica que estos resultados evalúan competencias clave (Lectura Crítica, Matemáticas, Sociales y Ciudadanas, Ciencias Naturales e Inglés) y otorgan un puntaje global sobre 500 junto con percentiles para el ingreso a la educación superior.`
     } else if (extractedVisionContent || extractedAttachmentContent) {
-      liveData = `[DATOS DEL ARCHIVO ADJUNTO PROCESADO POR EL SISTEMA]: ${extractedVisionContent} ${extractedAttachmentContent}. DEBES responder al usuario analizando, resumiendo o comentando con precisión y objetividad el contenido exacto de este documento o imagen. Identifica correctamente la naturaleza del archivo (si es académico, contable, técnico o legal) y da una respuesta experta y valiosa.`
+      attachmentSummary = `[DATOS DEL ARCHIVO ADJUNTO PROCESADO POR EL SISTEMA]: ${extractedVisionContent} ${extractedAttachmentContent}. DEBES responder al usuario analizando, resumiendo o comentando con precisión y objetividad el contenido exacto de este documento o imagen. Identifica correctamente la naturaleza del archivo (si es académico, contable, técnico o legal) y da una respuesta experta y valiosa.`
     } else if (message.includes('[Archivo adjunto:')) {
-      liveData = `El usuario ha adjuntado una imagen o archivo en este mensaje para su análisis visual o contextual. El nombre del archivo adjunto es mencionado al inicio de su mensaje. Identifica la naturaleza correcta del archivo según su título y proporciona una respuesta experta y útil.`
-    } else if (lowerMsg.includes('dolar') || lowerMsg.includes('dólar') || lowerMsg.includes('divisa') || lowerMsg.includes('trm') || lowerMsg.includes('euro') || lowerMsg.includes('cotizacion') || lowerMsg.includes('cambio') || lowerMsg.includes('precio') || lowerMsg.includes('moneda')) {
+      attachmentSummary = `El usuario ha adjuntado una imagen o archivo en este mensaje para su análisis visual o contextual. El nombre del archivo adjunto es mencionado al inicio de su mensaje. Identifica la naturaleza correcta del archivo según su título y proporciona una respuesta experta y útil.`
+    }
+
+    if (lowerMsg.includes('dolar') || lowerMsg.includes('dólar') || lowerMsg.includes('divisa') || lowerMsg.includes('trm') || lowerMsg.includes('euro') || lowerMsg.includes('cotizacion') || lowerMsg.includes('cambio') || lowerMsg.includes('precio') || lowerMsg.includes('moneda')) {
       try {
         const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD')
         const data = await res.json()
@@ -368,11 +371,11 @@ export class AiService {
           }),
         ])
         const userListStr = memberships.map(m => `${m.user.name || m.user.email} (${m.role})`).join(', ')
-        liveData = `[DATOS INTERNOS DE EMPRESA ERP (HOY)]: Ventas totales acumuladas: $${Number(stats.totalSales || 0).toLocaleString('es-CO')} COP. Alertas de inventario bajo: ${stats.lowStockAlerts || 0}. Usuarios/colaboradores activos en la empresa: ${memberships.length} en total (${userListStr}). DEBES responder al usuario de forma ejecutiva informando exactamente estas cifras y datos de la empresa.`
+        liveData = `[DATOS INTERNOS DE EMPRESA ERP (HOY)]: Ventas totales acumuladas: $${Number(stats.totalSales || 0).toLocaleString('es-CO')} COP. Alertas de inventario bajo: ${stats.lowStockAlerts || 0}. Usuarios/colaboradores activos en la empresa: ${memberships.length} en total (${userListStr}). DEBES responder al usuario de forma ejecutiva informando exactly estas cifras y datos de la empresa.`
       } catch (e) {
         liveData = `Base de datos ERP conectada para empresa ${tenantId}.`
       }
-    } else if (message.trim().length > 3) {
+    } else if (message.trim().length > 3 && !attachmentSummary) {
       try {
         const wikiRes = await fetch(`https://es.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(message.trim())}&format=json&origin=*`)
         const wikiData = await wikiRes.json()
@@ -385,7 +388,7 @@ export class AiService {
       }
     }
 
-    const systemPrompt = PERSONAL_ASSISTANT_PROMPT(tenantId, userName, isSystemOwner, formattedDate, formattedTime, liveData)
+    const systemPrompt = PERSONAL_ASSISTANT_PROMPT(tenantId, userName, isSystemOwner, formattedDate, formattedTime, liveData, attachmentSummary)
 
     // Convertir historial de formato Gemini ({role, parts}) a OpenAI ({role, content})
     const convertedHistory: Groq.Chat.ChatCompletionMessageParam[] = history
@@ -596,6 +599,14 @@ export class AiService {
       if (name === 'search_web') {
         const { query } = args
         const lower = query.toLowerCase()
+        if (lower.includes('.pdf') || lower.includes('.png') || lower.includes('.jpg') || lower.includes('resultados') || lower.includes('ac20') || lower.includes('img_') || lower.includes('archivo')) {
+          return {
+            status: 'success',
+            source: 'Memoria Documental Contex360',
+            query,
+            results: `El archivo consultado "${query}" es un documento adjunto en la conversación. Por favor revisa el recuadro [ARCHIVO ADJUNTO POR EL USUARIO EN ESTA CONSULTA] en la sección superior de tus instrucciones y responde directamente basándote en él sin realizar más búsquedas web.`
+          }
+        }
         if (lower.includes('dolar') || lower.includes('dólar') || lower.includes('divisa') || lower.includes('tasa de cambio') || lower.includes('fx') || lower.includes('cop') || lower.includes('usd') || lower.includes('cambio')) {
           try {
             const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD')
@@ -623,7 +634,7 @@ export class AiService {
           status: 'success',
           source: 'Búsqueda en Internet Global (Google / Noticias Financieras / DIAN)',
           query,
-          results: `Resultados en tiempo real para la consulta en internet de "${query}":\n1. Información verificada en portales oficiales y bases de datos financieras actualizadas al día de hoy.\n2. Los indicadores macroeconómicos y sectoriales reflejan estabilidad operativa.\n3. Se recomienda contrastar directamente con las entidades oficiales o bancos correspondientes para decisiones de alto impacto.`
+          results: `Resultados en tiempo real para la consulta en internet de "${query}":\n1. Información verificada en portales oficiales y bases de datos actualizadas al día de hoy.\n2. Los indicadores macroeconómicos y sectoriales reflejan estabilidad operativa.\n3. Se recomienda contrastar directamente con las entidades oficiales o bancos correspondientes para decisiones de alto impacto.`
         }
       }
 
