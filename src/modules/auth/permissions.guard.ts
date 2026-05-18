@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common'
 import { Reflector } from '@nestjs/core'
 import { PERMISSIONS_KEY } from './permissions.decorator'
+import { IS_PUBLIC_KEY } from './public.decorator'
 import { ROLE_DEFINITIONS } from './rbac.constants'
 import { AuthenticatedRequest } from './auth.types'
 import { PrismaService } from '../database/prisma.service'
@@ -13,6 +14,12 @@ export class PermissionsGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ])
+    if (isPublic) return true
+
     const requiredPermissions = this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, [
       context.getHandler(),
       context.getClass(),
