@@ -272,7 +272,9 @@ export class AiService {
     const lowerMsg = message.toLowerCase()
     const isErpQuery = lowerMsg.includes('venta') || lowerMsg.includes('vendim') || lowerMsg.includes('factura') || lowerMsg.includes('inventario') || lowerMsg.includes('stock') || lowerMsg.includes('producto') || lowerMsg.includes('cliente') || lowerMsg.includes('proveedor') || lowerMsg.includes('cotiza') || lowerMsg.includes('compra') || lowerMsg.includes('tesoreria') || lowerMsg.includes('ingreso') || lowerMsg.includes('gasto') || lowerMsg.includes('empresa') || lowerMsg.includes('tenant') || lowerMsg.includes('balance') || lowerMsg.includes('cuanto') || lowerMsg.includes('cuales') || lowerMsg.includes('usuario') || lowerMsg.includes('colaborador') || lowerMsg.includes('empleado') || lowerMsg.includes('equipo') || lowerMsg.includes('persona')
 
-    if (lowerMsg.includes('dolar') || lowerMsg.includes('dólar') || lowerMsg.includes('divisa') || lowerMsg.includes('trm') || lowerMsg.includes('euro') || lowerMsg.includes('cotizacion') || lowerMsg.includes('cambio') || lowerMsg.includes('precio') || lowerMsg.includes('moneda')) {
+    if (message.includes('[Archivo adjunto:')) {
+      liveData = `El usuario ha adjuntado una imagen o archivo en este mensaje para su análisis visual o contextual. El nombre del archivo adjunto es mencionado al inicio de su mensaje. Proporciona una respuesta experta y útil analizando de qué se trata el archivo o imagen mencionada en su pregunta.`
+    } else if (lowerMsg.includes('dolar') || lowerMsg.includes('dólar') || lowerMsg.includes('divisa') || lowerMsg.includes('trm') || lowerMsg.includes('euro') || lowerMsg.includes('cotizacion') || lowerMsg.includes('cambio') || lowerMsg.includes('precio') || lowerMsg.includes('moneda')) {
       try {
         const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD')
         const data = await res.json()
@@ -382,6 +384,20 @@ export class AiService {
       return this.formatResponse(responseText.trim())
     } catch (error: any) {
       console.error('AiService Error:', error.stack || error.message)
+      const errStr = error.message || ''
+      if (errStr.includes('failed_generation')) {
+        try {
+          const jsonStartIndex = errStr.indexOf('{')
+          if (jsonStartIndex !== -1) {
+            const jsonObj = JSON.parse(errStr.substring(jsonStartIndex))
+            if (jsonObj?.error?.failed_generation) {
+              return this.formatResponse(jsonObj.error.failed_generation.trim())
+            }
+          }
+        } catch (e) {
+          // fallback
+        }
+      }
       return {
         role: 'assistant',
         content: `Error del Cerebro IA: ${error.message || 'Error desconocido'}. Por favor contacta a soporte.`,
