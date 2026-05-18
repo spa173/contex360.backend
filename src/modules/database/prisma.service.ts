@@ -40,6 +40,22 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnAppli
         sessionPolicy: { singleSessionOnly: false },
       }
 
+      const tenantSystem = await this.tenant.upsert({
+        where: { prefix: 'SYS' },
+        update: {},
+        create: {
+          id: 'system',
+          name: 'Contex360 Global Cloud',
+          prefix: 'SYS',
+          nit: '800000000-1',
+          allowNegativeStock: true,
+          sector: 'Tecnología / Plataforma',
+          city: 'Global',
+          dianStatus: 'Sistema',
+          securitySettings: defaultSecuritySettings,
+        },
+      })
+
       const tenantA = await this.tenant.upsert({
         where: { prefix: 'CL' },
         update: {},
