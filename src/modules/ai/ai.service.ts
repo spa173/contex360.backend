@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import Groq from 'groq-sdk'
 const pdfParse = require('pdf-parse')
+import { Prisma, ThirdPartyKind } from '@prisma/client'
 import { PrismaService } from '../database/prisma.service'
 import { AnalyticsService } from '../analytics/analytics.service'
 import { NotificationService } from '../notification/notification.service'
@@ -208,6 +209,40 @@ const TOOLS: Groq.Chat.ChatCompletionTool[] = [
           amount: { type: 'number', description: 'Monto de la deuda.' },
         },
         required: ['clientName', 'daysOverdue', 'amount'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_third_party',
+      description: 'Crea o registra un nuevo cliente o proveedor en la base de datos del ERP.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Nombre o razón social del cliente o proveedor.' },
+          nit: { type: 'string', description: 'NIT, RUT o documento de identificación fiscal.' },
+          email: { type: 'string', description: 'Correo electrónico de contacto.' },
+          kind: { type: 'string', enum: ['client', 'provider', 'employee'], description: 'Tipo de tercero (client para clientes, provider para proveedores).' },
+        },
+        required: ['name', 'nit', 'email', 'kind'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_product',
+      description: 'Crea o registra un nuevo producto o ítem en el catálogo de inventario.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Nombre del producto.' },
+          price: { type: 'number', description: 'Precio unitario de venta.' },
+          sku: { type: 'string', description: 'Código único SKU o referencia.' },
+          stock: { type: 'number', description: 'Cantidad inicial en stock.' },
+        },
+        required: ['name', 'price', 'sku'],
       },
     },
   },
@@ -618,6 +653,71 @@ export class AiService {
           source: 'Búsqueda en Internet Global (Google / Noticias Financieras / DIAN)',
           query,
           results: `Resultados en tiempo real para la consulta en internet de "${query}":\n1. Información verificada en portales oficiales y bases de datos actualizadas al día de hoy.\n2. Los indicadores macroeconómicos y sectoriales reflejan estabilidad operativa.\n3. Se recomienda contrastar directamente con las entidades oficiales o bancos correspondientes para decisiones de alto impacto.`
+        }
+      }
+
+      if (name === 'create_third_party') {
+        const { name: tpName, nit, email, kind } = args
+        const cleanNit = nit || `${Math.floor(800000000 + Math.random() * 100000000)}-${Math.floor(Math.random() * 9)}`
+        const cleanEmail = email || `${tpName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'contacto'}@proveedor.com`
+        const kindEnum = kind === 'client' ? ThirdPartyKind.client : ThirdPartyKind.provider
+
+        const created = await this.prisma.thirdParty.upsert({
+          where: { tenantId_nit: { tenantId, nit: cleanNit } },
+          update: { name: tpName, email: cleanEmail },
+          create: {
+            tenantId,
+            name: tpName,
+            nit: cleanNit,
+            email: cleanEmail,
+            phone: '3001234567',
+            address: 'Calle Principal # 12-34',
+            city: 'Bogotá',
+            kind: kindEnum,
+            taxProfile: 'Responsable de IVA',
+          },
+        })
+        return {
+          status: 'success',
+          action: 'created_third_party',
+          suggestedAction: 'view_third_parties',
+          data: created,
+          message: `El ${kind === 'client' ? 'cliente' : 'proveedor'} "${tpName}" (NIT: ${cleanNit}) ha sido registrado exitosamente en el sistema.`,
+        }
+      }
+
+      if (name === 'create_product') {
+        const { name: prodName, price, sku, stock } = args
+        const cleanPrice = Number(price) || 0
+        const cleanSku = sku || `SKU-${Math.floor(10000 + Math.random() * 90000)}`
+        const cleanStock = Number(stock) || 10
+
+        const created = await this.prisma.product.upsert({
+          where: { tenantId_sku: { tenantId, sku: cleanSku } },
+          update: { name: prodName, price: new Prisma.Decimal(cleanPrice) },
+          create: {
+            tenantId,
+            sku: cleanSku,
+            name: prodName,
+            price: new Prisma.Decimal(cleanPrice),
+            cost: new Prisma.Decimal(Math.round(cleanPrice * 0.7)),
+            taxRate: new Prisma.Decimal('19.00'),
+            stock: cleanStock,
+            stockByLocation: { 'Bodega Principal': cleanStock },
+            location: 'Bodega Principal',
+            category: 'General',
+            barcode: cleanSku,
+            isInventoriable: true,
+            productType: 'standard',
+            unit: 'und',
+          },
+        })
+        return {
+          status: 'success',
+          action: 'created_product',
+          suggestedAction: 'manage_inventory',
+          data: created,
+          message: `El ítem "${prodName}" con precio de $${cleanPrice.toLocaleString('es-CO')} COP ha sido añadido al inventario.`,
         }
       }
 
