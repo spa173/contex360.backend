@@ -83,9 +83,18 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnAppli
       for (const u of usersToCreate) {
         const passwordHash = hashSync(`${u.email}!A1`, 10)
         
+        const existingByEmail = await this.user.findUnique({ where: { email: u.email } })
+        if (existingByEmail && existingByEmail.id !== u.id) {
+          await this.user.update({
+            where: { id: existingByEmail.id },
+            data: { email: `archived-${Date.now()}-${existingByEmail.email}` },
+          })
+        }
+
         const user = await this.user.upsert({
-          where: { email: u.email },
+          where: { id: u.id },
           update: {
+            email: u.email,
             name: u.name,
             title: u.title,
             status: 'active',
