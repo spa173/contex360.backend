@@ -450,7 +450,7 @@ export class AiService {
         responseText = responseMessage.content ?? 'No pude generar una respuesta de texto.'
       }
 
-      return this.formatResponse(responseText.trim())
+      return this.formatResponse(responseText.trim(), extractedVisionContent || extractedAttachmentContent)
     } catch (error: any) {
       console.error('AiService Error:', error.stack || error.message)
       const errStr = error.message || ''
@@ -460,7 +460,7 @@ export class AiService {
           if (jsonStartIndex !== -1) {
             const jsonObj = JSON.parse(errStr.substring(jsonStartIndex))
             if (jsonObj?.error?.failed_generation) {
-              return this.formatResponse(jsonObj.error.failed_generation.trim())
+              return this.formatResponse(jsonObj.error.failed_generation.trim(), extractedVisionContent || extractedAttachmentContent)
             }
           }
         } catch (e) {
@@ -628,13 +628,13 @@ export class AiService {
     }
   }
 
-  private formatResponse(responseText: string) {
+  private formatResponse(responseText: string, extractedData?: string) {
     let suggestedAction: string | undefined
     const lower = responseText.toLowerCase()
     if (lower.includes('facturación') || lower.includes('factura')) suggestedAction = 'view_billing'
     else if (lower.includes('inventario') || lower.includes('stock')) suggestedAction = 'manage_inventory'
     else if (lower.includes('venta') || lower.includes('reporte')) suggestedAction = 'view_reports'
-    return { role: 'assistant', content: responseText, suggestedAction }
+    return { role: 'assistant', content: responseText, suggestedAction, extractedData }
   }
 
   async translateText(texts: Record<string, string>, targetLang: string) {
