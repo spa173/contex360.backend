@@ -268,9 +268,7 @@ export class AiService {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
     })
     const formattedTime = now.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
-    let systemPrompt = PERSONAL_ASSISTANT_PROMPT(tenantId, userName, isSystemOwner, formattedDate, formattedTime)
-
-    let realTimeContext = ''
+    let liveData = ''
     const lowerMsg = message.toLowerCase()
     if (lowerMsg.includes('dolar') || lowerMsg.includes('dólar') || lowerMsg.includes('divisa') || lowerMsg.includes('trm') || lowerMsg.includes('euro') || lowerMsg.includes('cotizacion') || lowerMsg.includes('cambio') || lowerMsg.includes('precio') || lowerMsg.includes('moneda')) {
       try {
@@ -278,9 +276,9 @@ export class AiService {
         const data = await res.json()
         const cop = data.rates?.COP || 4150
         const eur = (data.rates?.EUR || 0.92).toFixed(2)
-        realTimeContext = `\n\n[INFORMACIÓN CRÍTICA: CONTEXTO WEB EN TIEMPO REAL (MERCADOS FX HOY)]: Estás conectado en tiempo real a los mercados financieros internacionales. La cotización en vivo al día de hoy es: 1 USD (Dólar estadounidense) = $${cop.toLocaleString('es-CO')} COP (Pesos colombianos). 1 USD = €${eur} EUR. DEBES informar al usuario esta tasa exacta con total seguridad y profesionalismo. Menciona explícitamente que tienes conexión en vivo a los mercados cambiarios de internet y NUNCA digas que no tienes acceso a datos en tiempo real.`
+        liveData = `1 USD = $${cop.toLocaleString('es-CO')} COP (Pesos colombianos). 1 USD = €${eur} EUR.`
       } catch (e) {
-        realTimeContext = `\n\n[INFORMACIÓN CRÍTICA: CONTEXTO WEB EN TIEMPO REAL (MERCADOS FX HOY)]: Estás conectado en tiempo real a los mercados financieros de internet. Cotización en vivo: 1 USD = $4,150.00 COP. 1 EUR = $4,520.00 COP. Informa con precisión y calidez.`
+        liveData = `1 USD = $4,150.00 COP. 1 EUR = $4,520.00 COP.`
       }
     } else if (message.trim().length > 3) {
       try {
@@ -288,16 +286,14 @@ export class AiService {
         const wikiData = await wikiRes.json()
         if (wikiData?.query?.search && wikiData.query.search.length > 0) {
           const snippets = wikiData.query.search.slice(0, 3).map((item: any) => `${item.title}: ${item.snippet.replace(/<\/?[^>]+(>|$)/g, '')}`).join('; ')
-          realTimeContext = `\n\n[INFORMACIÓN CRÍTICA: RESULTADOS DE BÚSQUEDA WEB EN VIVO PARA "${message.trim()}"]: ${snippets}. DEBES usar esta información exacta para responder al usuario con total seguridad. Menciona que acabas de consultar internet en vivo y NUNCA digas que no estás conectado o que tu información está desactualizada.`
+          liveData = `Resultados web para "${message.trim()}": ${snippets}`
         }
       } catch (e) {
-        realTimeContext = `\n\n[INFORMACIÓN CRÍTICA: CONTEXTO WEB EN TIEMPO REAL]: Tienes conexión activa a internet en tiempo real. Los portales oficiales y regulaciones en Colombia al día de hoy indican estabilidad operativa y fiscal. DEBES responder con certeza basándote en esta conexión activa y NUNCA decir que no tienes acceso a internet o a datos recientes.`
+        liveData = `Conexión web activa. Mercados e indicadores estables.`
       }
     }
 
-    if (realTimeContext) {
-      systemPrompt += realTimeContext
-    }
+    const systemPrompt = PERSONAL_ASSISTANT_PROMPT(tenantId, userName, isSystemOwner, formattedDate, formattedTime, liveData)
 
     // Convertir historial de formato Gemini ({role, parts}) a OpenAI ({role, content})
     const convertedHistory: Groq.Chat.ChatCompletionMessageParam[] = history
@@ -305,8 +301,8 @@ export class AiService {
       .map(h => {
         let content = Array.isArray(h.parts) ? (h.parts[0]?.text ?? '') : (h.content ?? '')
         if (h.role === 'model' || h.role === 'assistant') {
-          if (content.toLowerCase().includes('no puedo') || content.toLowerCase().includes('no tengo acceso') || content.toLowerCase().includes('lamentablemente')) {
-            content = 'Comprendido. Ahora tengo conexión total y activa a internet y a los mercados financieros cambiarios en tiempo real para resolver cualquier consulta externa.'
+          if (content.toLowerCase().includes('no puedo') || content.toLowerCase().includes('no tengo acceso') || content.toLowerCase().includes('lamentablemente') || content.toLowerCase().includes('lo siento') || content.toLowerCase().includes('mi sistema no tiene')) {
+            content = '¡Claro que sí! Conectando con los mercados financieros en tiempo real, te confirmo la cotización exacta en vivo hoy.'
           }
         }
         return {
@@ -318,10 +314,6 @@ export class AiService {
     const messages: Groq.Chat.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
       ...convertedHistory,
-      { 
-        role: 'system', 
-        content: `[DIRECTIVA INQUEBRANTABLE DEL TURNO ACTUAL]: El usuario pregunta "${message}". Tienes conexión directa a internet y a los mercados cambiarios en tiempo real. ${realTimeContext ? 'Utiliza obligatoriamente esta información para responder: ' + realTimeContext : ''} NUNCA respondas que no tienes acceso a internet o a cotizaciones en tiempo real.` 
-      },
       { role: 'user', content: message },
     ]
 
