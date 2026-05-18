@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import Groq from 'groq-sdk'
-import pdfParse from 'pdf-parse'
+const pdfParse = require('pdf-parse')
 import { PrismaService } from '../database/prisma.service'
 import { AnalyticsService } from '../analytics/analytics.service'
 import { NotificationService } from '../notification/notification.service'
