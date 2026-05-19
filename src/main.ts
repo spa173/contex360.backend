@@ -29,6 +29,12 @@ export async function bootstrap() {
   appInstance = app
   const configService = app.get(ConfigService)
 
+  // Railway y Render terminan TLS en el proxy y reenvían la IP real
+  // en X-Forwarded-For. Sin esto: rate limiting por IP del proxy,
+  // sesiones con IP incorrecta y cookies secure rechazadas en HTTP interno.
+  const expressApp = app.getHttpAdapter().getInstance()
+  expressApp.set('trust proxy', 1)
+
   app.use(json({ limit: '50mb' }))
   app.use(urlencoded({ extended: true, limit: '50mb' }))
   
