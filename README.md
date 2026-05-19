@@ -307,12 +307,18 @@ npx prisma migrate reset     # resetear (destructivo)
 
 ## Usuario de prueba
 
+Ejecuta `npm run db:seed` en un entorno local o de staging. El seed imprime las credenciales generadas una sola vez en stdout — no hay contraseña por defecto.
+
+```powershell
+npm run db:seed
+# Seed completed successfully.
+# Generated passwords (save these — shown only once):
+#   root@contex360.local => <token_aleatorio>
+#   admin.labs@contex360.local => <token_aleatorio>
+#   ...
 ```
-Email:    admin@contex360.com
-Password: Admin123!
-Tenant:   Empresa Demo (tenant-001)
-Rol:      owner
-```
+
+Para producción, crea el primer usuario administrador desde `POST /admin/companies` tras el despliegue inicial.
 
 ---
 
