@@ -369,6 +369,7 @@ export class AnalyticsService {
           phone: '3001234567',
           address: 'Dirección OCR',
           city: 'Bogotá',
+          taxProfile: 'Persona Jurídica',
         },
       });
     }
@@ -380,10 +381,9 @@ export class AnalyticsService {
         tenantId,
         number: `CO-${nextNumber}`,
         providerId: provider.id,
-        providerName: provider.name,
         status: 'registered',
         subtotal,
-        tax,
+        taxTotal: tax,
         total,
         notes: `Registrado automáticamente mediante OCR de IA (${ocrRun.source})`,
       },
