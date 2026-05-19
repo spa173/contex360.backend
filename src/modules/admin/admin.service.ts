@@ -410,8 +410,9 @@ export class AdminService {
     phone?: string
     sector?: string
   }) {
-    const tempPassword = randomBytes(6).toString('base64').slice(0, 10) + 'A1!'
-    const passwordHash = hashSync(tempPassword, 10)
+    // 128 bits de entropía — sin sufijo fijo ni patrón predecible
+    const tempPassword = randomBytes(16).toString('base64url')
+    const passwordHash = hashSync(tempPassword, 12)
 
     const prefix = data.prefix || data.name.slice(0, 3).toUpperCase()
 
