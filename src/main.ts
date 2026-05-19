@@ -93,16 +93,3 @@ if (!process.env.VITE) {
   })
 }
 
-// @ts-ignore
-if (import.meta.hot) {
-  // @ts-ignore
-  import.meta.hot.dispose(async () => {
-    if (appInstance) {
-      try {
-        await appInstance.close()
-      } catch (e) {
-        // ignore
-      }
-    }
-  })
-}
