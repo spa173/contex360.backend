@@ -15,7 +15,7 @@ export const rlsContextStorage = new AsyncLocalStorage<RlsUserContext>()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnApplicationShutdown {
   async onModuleInit() {
     await this.$connect()
-    await this.ensureSeedData()
+    // Autoseed desactivado para producción
   }
 
   async onApplicationShutdown() {
