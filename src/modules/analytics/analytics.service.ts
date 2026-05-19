@@ -160,6 +160,7 @@ export class AnalyticsService {
     })
 
     return result;
+  }
 
   /**
    * Retrieve real‑time alerts for the tenant.
@@ -183,5 +184,4 @@ export class AnalyticsService {
       pendingInvoices,
     };
   }
-  
-
+}
