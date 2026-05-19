@@ -24,6 +24,7 @@ import { DianModule } from './modules/dian/dian.module'
 import { TreasuryModule } from './modules/treasury/treasury.module'
 import { QuotesModule } from './modules/quotes/quotes.module'
 import { SupportModule } from './modules/support/support.module'
+import { IntegrationsModule } from './modules/integrations/integrations.module'
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { SupportModule } from './modules/support/support.module'
     TreasuryModule,
     QuotesModule,
     SupportModule,
+    IntegrationsModule,
   ],
   controllers: [AppController],
   providers: [

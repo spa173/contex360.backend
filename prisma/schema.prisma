@@ -625,6 +625,23 @@ enum SupportTicketPriority {
   critica
 }
 
+model IntegrationCredential {
+  id           String    @id @default(cuid())
+  tenantId     String
+  provider     String
+  accountEmail String?
+  accessToken  String?
+  refreshToken String?
+  expiresAt    DateTime?
+  isActive     Boolean   @default(true)
+  metadata     Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([tenantId, provider])
+  @@index([tenantId])
+}
+
 model SupportTicket {
   id          String                @id @default(cuid())
   tenantId    String?
