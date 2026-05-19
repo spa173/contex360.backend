@@ -133,6 +133,11 @@ export class DemoService {
         data: {
           name: demoRequest.empresa,
           prefix,
+          nit: demoRequest.nit,
+          address: demoRequest.direccion,
+          phone: demoRequest.telefono,
+          sector: demoRequest.sector,
+          city: demoRequest.ciudad,
           securitySettings: {},
         },
       });
