@@ -1,47 +1,36 @@
 # Contex360 — Backend API
 
-> ERP colombiano certificado DIAN. Backend construido con **NestJS + Prisma + PostgreSQL (Neon)**.
+> ERP colombiano multi-tenant. Backend construido con **NestJS + Prisma + PostgreSQL (Neon)**.
 
 ---
 
-## Stack tecnológico
+## Stack
 
 | Capa | Tecnología |
 |---|---|
-| Framework | NestJS 10 |
-| ORM | Prisma 5 |
+| Framework | NestJS 11 |
+| ORM | Prisma 6 |
 | Base de datos | PostgreSQL via Neon (pooler PgBouncer) |
-| Autenticación | JWT (access token) + Refresh Token |
+| Autenticación | JWT access token (15 min) + Refresh token rotado (30 días) |
 | Validación | class-validator + ValidationPipe |
 | Documentación | Swagger / OpenAPI en `/docs` |
-| Rate limiting | @nestjs/throttler |
+| Rate limiting | @nestjs/throttler (100 req/min · 1000 req/h por IP real) |
 | Scheduler | @nestjs/schedule |
-| Runtime | Node.js 20 / TypeScript 5 |
+| Runtime | Node.js 20+ / TypeScript 5 |
 
 ---
 
-## Instalación rápida
+## Instalación
 
 ```powershell
-# 1. Instalar dependencias
 npm install
-
-# 2. Configurar variables de entorno
-copy .env.example .env
-# Editar .env con las credenciales de Neon
-
-# 3. Generar cliente Prisma
+copy .env.example .env   # editar con credenciales Neon
 npx prisma generate
-
-# 4. Aplicar migraciones
 npx prisma migrate deploy
-
-# 5. Iniciar en desarrollo
 npm run start:dev
 ```
 
-El servidor queda disponible en `http://localhost:3001`.  
-Swagger en `http://localhost:3001/docs`.
+Servidor en `http://localhost:3001` · Swagger en `http://localhost:3001/docs`.
 
 ---
 
@@ -69,63 +58,108 @@ SWAGGER_PATH=docs
 
 ---
 
+## Estado real por módulo
+
+### ✅ Completamente funcional
+
+**Auth** — login bcrypt, JWT + refresh token rotado, 2FA TOTP, RBAC por rol, sesiones con IP real (trust proxy configurado para Railway/Render), bloqueo por intentos fallidos, historial de contraseñas, derecho al olvido (Art. 15 Ley 1581).
+
+**Facturas** — creación con descuento de stock atómico en transacción, numeración automática por tenant, cancelación con reversión de inventario, cartera vencida y aging por buckets, asiento contable automático al marcar como aceptada.
+
+**Compras** — creación con ingreso de stock, numeración automática, asiento contable doble entrada (gastos + IVA descontable + proveedores), pago con asiento de cancelación.
+
+**Cotizaciones** — CRUD completo, conversión a factura (solo desde estado `accepted`), numeración automática.
+
+**Tesorería** — transacciones INCOME/EXPENSE, balance calculado desde DB, asiento contable automático por movimiento.
+
+**Inventario** — movimientos de entrada/salida, traslados entre bodegas con estados.
+
+**Contabilidad (Ledger)** — asientos doble entrada con validación de cuadre (débitos = créditos ± 0.01), generados automáticamente por facturas, compras y tesorería.
+
+**Terceros** — CRUD de clientes y proveedores.
+
+**Productos** — CRUD básico. Soporta `isInventoriable`, `stock`, `minStock`, `stockByLocation`, kits.
+
+**Analytics** — KPIs de dashboard, ventas por mes, reporte de ventas con comparación de período anterior, top productos, flujo de caja con proyección a 15 días (regresión lineal sobre últimos 7 días), alertas de stock bajo y facturas pendientes.
+
+**Admin console** — stats globales, gestión de tenants y usuarios, compliance dashboard con revisión periódica de accesos (automatizada mensualmente), plan de continuidad, alertas de brechas, creación de empresas con usuario admin temporal.
+
+**DIAN** — generación de XML UBL 2.1, cálculo de CUFE (SHA-384), firma digital con certificado `.p12/.pfx` (node-forge + xml-crypto), transmisión SOAP a habilitación (`SendTestSetAsync`) y producción (`SendBillSync`), consulta de estado (`GetStatus`), timeline por factura, validación de configuración por tenant.
+
+**Bancolombia** — configuración OAuth por tenant, generación de URL de consentimiento, callback con almacenamiento de tokens cifrados, sincronización de extractos MT940/CAMT.053, desconexión. El `client_secret` nunca sale del backend.
+
+**OCR / IA** — extracción de campos desde documentos (Groq), simulación de OCR con datos mock para demo, aprobación que crea compra + proveedor + transacción automáticamente.
+
+**Notificaciones** — alertas de brechas por email (nodemailer).
+
+**Health** — `GET /health` con estado de DB.
+
+---
+
+### ⚠️ Parcial o con limitaciones conocidas
+
+**DIAN en producción** — el flujo SOAP está implementado pero no ha pasado por el proceso de habilitación real con la DIAN. Requiere certificado digital vigente emitido por una entidad autorizada, resolución de facturación activa y testSetId válido. El CUFE se calcula según la especificación técnica v1.9 pero no ha sido validado contra el ambiente de producción.
+
+**Analytics — proyección de flujo de caja** — usa regresión lineal simple sobre los últimos 7 días más ruido sinusoidal. Es orientativa, no un modelo financiero.
+
+**Productos — CRUD** — `create` y `findAll` implementados; `update` y `delete` están en el controller pero el service solo tiene `create` y `findAll`. Las rutas `PATCH /products/:id` y `DELETE /products/:id` devuelven error hasta que se complete el service.
+
+**OCR real** — `simulateOcrRun` devuelve datos mock hardcodeados (3 facturas de Éxito, Coordinadora y D1). La integración real con Groq está en `ai.service.ts` pero no está conectada al flujo de aprobación de compras.
+
+**Throttler** — configurado pero el guard global está comentado en `app.module.ts`. El rate limiting no está activo en ninguna ruta hasta que se habilite.
+
+---
+
+### ❌ No implementado aún
+
+- Exportación a Excel (solo CSV básico en analytics)
+- Notas crédito / débito DIAN
+- Firma electrónica de documentos de compra
+- Webhooks salientes
+- Reportes contables (balance general, estado de resultados, libro mayor)
+- Integración bancaria con movimientos reales (Open Finance Bancolombia no entrega saldos ni movimientos, solo valida titularidad)
+
+---
+
 ## Arquitectura de módulos
 
 ```
 src/
-├── app.module.ts          # Módulo raíz
-├── main.ts                # Bootstrap: CORS, Swagger, pipes, interceptors
+├── app.module.ts
+├── main.ts                # trust proxy, CORS, Swagger, pipes
 ├── common/
-│   ├── interceptors/      # LoggingInterceptor
-│   └── env-validator.ts   # Validación de variables de entorno al arranque
+│   ├── decorators/        # @TenantId, @CurrentUser
+│   ├── interceptors/      # LoggingInterceptor, RlsContextInterceptor
+│   └── env-validator.ts
 └── modules/
-    ├── auth/              # Autenticación JWT + sesiones + 2FA + RBAC
-    ├── database/          # PrismaModule (singleton global)
-    ├── health/            # Health check
-    ├── products/          # Gestión de productos e inventario base
+    ├── auth/              # JWT, 2FA, RBAC, sesiones, OAuth
+    ├── database/          # PrismaModule singleton global
+    ├── invoices/          # Facturación + DIAN timeline
+    ├── purchases/         # Compras + stock + ledger
+    ├── quotes/            # Cotizaciones
+    ├── treasury/          # Tesorería + ledger automático
+    ├── ledger/            # Asientos contables doble entrada
+    ├── inventory/         # Movimientos y traslados
+    ├── products/          # Catálogo de productos
     ├── third-parties/     # Clientes y proveedores
-    ├── invoices/          # Facturación electrónica DIAN
-    ├── inventory/         # Movimientos y traslados de inventario
-    ├── analytics/         # KPIs y métricas de negocio
-    ├── ai/                # OCR e inteligencia artificial
-    ├── admin/             # Consola de administración global
-    ├── notification/      # Sistema de notificaciones
-    └── demo/              # Gestión de solicitudes de demo
+    ├── dian/              # XML UBL 2.1, CUFE, SOAP
+    ├── analytics/         # KPIs, reportes, flujo de caja
+    ├── ai/                # OCR con Groq
+    ├── admin/             # Consola global + compliance
+    ├── integrations/      # Bancolombia OAuth + extractos
+    ├── notification/      # Email de alertas
+    ├── support/           # Tickets de soporte
+    ├── demo/              # Solicitudes de demo
+    └── health/            # Health check
 ```
 
 ### Patrón por módulo
 
 ```
-Route (Controller) → Guard (JWT/RBAC) → Service → PrismaService → Neon DB
+Controller → Guard (JWT + RBAC) → Service → PrismaService → Neon DB
 ```
 
----
-
-## Flujo de autenticación
-
-```mermaid
-sequenceDiagram
-    participant C as Cliente (Frontend)
-    participant A as AuthController
-    participant S as AuthService
-    participant DB as Neon (Prisma)
-
-    C->>A: POST /auth/login { email, password }
-    A->>S: validateUser()
-    S->>DB: findUser + verificar hash bcrypt
-    DB-->>S: User
-    S-->>A: { accessToken, refreshToken }
-    A-->>C: 200 { accessToken, refreshToken, user }
-
-    C->>A: GET /auth/me (Bearer token)
-    A->>S: JwtAuthGuard verifica JWT
-    S-->>C: 200 { user, memberships }
-
-    C->>A: POST /auth/refresh { refreshToken }
-    A->>S: rotateRefreshToken()
-    S->>DB: verificar + revocar token antiguo
-    S-->>C: 200 { accessToken, refreshToken nuevo }
-```
+El tenant activo se resuelve desde el header `x-tenant-id` via `@TenantId()`.
 
 ---
 
@@ -135,227 +169,138 @@ sequenceDiagram
 
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
-| POST | `/auth/login` | ❌ | Login con email + password |
-| GET | `/auth/me` | JWT | Usuario autenticado + memberships |
+| POST | `/auth/login` | ❌ | Login email + password + TOTP opcional |
+| GET | `/auth/me` | JWT | Usuario + memberships + sesión activa |
 | POST | `/auth/refresh` | ❌ | Rotar refresh token |
 | POST | `/auth/logout` | JWT | Revocar sesión |
 | GET | `/auth/sessions` | JWT | Sesiones activas del usuario |
-
-### Integraciones Bancolombia — `/integrations/bancolombia`
-
-| Método | Ruta | Auth | Descripción |
-|---|---|---|---|
-| GET | `/integrations/bancolombia/config` | JWT | Lee la configuración por tenant |
-| POST | `/integrations/bancolombia/config` | JWT | Guarda modo, cuenta, clientId y metadatos |
-| POST | `/integrations/bancolombia/connect` | JWT | Genera la URL de consentimiento OAuth |
-| GET | `/integrations/bancolombia/callback` | Pública | Recibe el `code` y guarda tokens |
-| DELETE | `/integrations/bancolombia/disconnect` | JWT | Revoca y limpia credenciales |
-| POST | `/integrations/bancolombia/sync` | JWT | Sincroniza extractos o registra la última revisión |
-
-### Notas de producto Bancolombia
-
-- Open Finance valida titularidad y consentimiento, pero no entrega movimientos ni saldos.
-- Para conciliación automática se deben importar extractos empresariales o exponer una fuente de movimientos.
-- Los tokens de Bancolombia se guardan cifrados en la base de datos con una clave del servidor.
-- El `client secret` nunca debe salir del backend.
-- El endpoint `POST /integrations/bancolombia/sync` acepta un archivo MT940 o CAMT.053 enviado por el frontend, o bien una lista de movimientos ya normalizados.
-- Si no se sube archivo, el backend puede leer una fuente remota indicada por `BANCOLOMBIA_STATEMENT_SOURCE_URL`.
-
-### Variables Bancolombia en producción
-
-```env
-BANCOLOMBIA_CLIENT_ID=<client-id-entregado-por-bancolombia>
-BANCOLOMBIA_CLIENT_SECRET=<client-secret-del-vault>
-BANCOLOMBIA_AUTHORIZATION_URL=https://...
-BANCOLOMBIA_TOKEN_URL=https://...
-BANCOLOMBIA_SCOPE=<scope-indicado-por-el-portal>
-BANCOLOMBIA_REDIRECT_URI=https://api.tudominio.com/integrations/bancolombia/callback
-BANCOLOMBIA_TOKEN_ENCRYPTION_SECRET=<clave-larga-aleatoria>
-BANCOLOMBIA_STATEMENT_SOURCE_URL=<url-opcional-de-extractos>
-```
-
-### Facturacion electronica DIAN
-
-```env
-DIAN_TEST_WSDL_URL=https://vpfe-hab.dian.gov.co/WcfDianCustomerServices.svc?singleWsdl
-DIAN_TEST_ENDPOINT_URL=https://vpfe-hab.dian.gov.co/WcfDianCustomerServices.svc
-DIAN_PROD_WSDL_URL=https://vpfe.dian.gov.co/WcfDianCustomerServices.svc?singleWsdl
-DIAN_PROD_ENDPOINT_URL=https://vpfe.dian.gov.co/WcfDianCustomerServices.svc
-```
-
-#### Como funciona
-
-1. La consola sube el certificado digital `.p12/.pfx` al backend.
-2. El backend genera el XML UBL 2.1, calcula el CUFE y firma el documento.
-3. En habilitacion usa `SendTestSetAsync`; en produccion usa `SendBillSync`.
-4. El `trackId`, CUFE y respuesta quedan en la `timeline` de la factura.
-
-#### Campos DIAN por tenant
-
-- `dianEnvironment`
-- `dianSoftwareId`
-- `dianSoftwarePin`
-- `dianNit`
-- `dianTestSetId`
-- `invoiceResolution`
-- `resolutionFrom`
-- `resolutionTo`
-- `dianOperationCode`
-- `dianCertificate` (base64 del `.p12/.pfx`)
-- `dianCertificatePassword`
-
-### Productos — `/products`
-
-| Método | Ruta | Auth | Descripción |
-|---|---|---|---|
-| GET | `/products` | JWT | Listar productos del tenant |
-| POST | `/products` | JWT | Crear producto |
-| PATCH | `/products/:id` | JWT | Actualizar producto |
-| DELETE | `/products/:id` | JWT | Eliminar producto |
-
-### Terceros — `/third-parties`
-
-| Método | Ruta | Auth | Descripción |
-|---|---|---|---|
-| GET | `/third-parties` | JWT | Listar clientes/proveedores |
-| POST | `/third-parties` | JWT | Crear tercero |
-| PATCH | `/third-parties/:id` | JWT | Actualizar tercero |
-| DELETE | `/third-parties/:id` | JWT | Eliminar tercero |
+| POST | `/auth/change-password` | JWT | Cambio de contraseña con historial |
+| PATCH | `/auth/profile` | JWT | Actualizar nombre y título |
 
 ### Facturas — `/invoices`
 
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
 | GET | `/invoices` | JWT | Listar facturas del tenant |
-| POST | `/invoices` | JWT | Crear factura |
-| PATCH | `/invoices/:id` | JWT | Actualizar estado |
-| DELETE | `/invoices/:id` | JWT | Eliminar factura draft |
+| GET | `/invoices/next-number` | JWT | Preview del próximo número |
+| GET | `/invoices/overdue` | JWT | Cartera vencida |
+| GET | `/invoices/aging` | JWT | Aging por buckets (0/30/60/90/90+) |
+| GET | `/invoices/:id` | JWT | Detalle con timeline DIAN |
+| POST | `/invoices` | JWT | Crear + descontar stock + asiento |
+| PATCH | `/invoices/:id/status` | JWT | Actualizar estado |
+| POST | `/invoices/:id/cancel` | JWT | Cancelar + revertir stock |
+| DELETE | `/invoices/:id` | JWT | Eliminar draft |
 
-### Inventario — `/inventory`
+### DIAN — `/dian`
 
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
-| GET | `/inventory/movements` | JWT | Historial de movimientos |
-| POST | `/inventory/movements` | JWT | Registrar entrada/salida |
-| GET | `/inventory/transfers` | JWT | Traslados entre bodegas |
-| POST | `/inventory/transfers` | JWT | Crear traslado |
+| GET | `/dian/config` | JWT | Configuración DIAN del tenant |
+| POST | `/dian/config` | JWT | Guardar configuración + certificado |
+| POST | `/dian/validate` | JWT | Validar configuración antes de enviar |
+| POST | `/dian/send/:invoiceId` | JWT | Transmitir factura (test o producción) |
+| GET | `/dian/status/:invoiceId` | JWT | Consultar estado en DIAN |
+
+### Compras — `/purchases`
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| GET | `/purchases` | JWT | Listar compras |
+| GET | `/purchases/next-number` | JWT | Preview del próximo número |
+| POST | `/purchases` | JWT | Crear + ingresar stock + asiento |
+| PATCH | `/purchases/:id/status` | JWT | Actualizar estado (paid genera asiento) |
+| DELETE | `/purchases/:id` | JWT | Eliminar |
+
+### Cotizaciones — `/quotes`
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| GET | `/quotes` | JWT | Listar cotizaciones |
+| POST | `/quotes` | JWT | Crear |
+| PATCH | `/quotes/:id/status` | JWT | Actualizar estado |
+| POST | `/quotes/:id/convert` | JWT | Convertir a factura (requiere `accepted`) |
+| DELETE | `/quotes/:id` | JWT | Eliminar |
+
+### Tesorería — `/treasury`
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| GET | `/treasury` | JWT | Listar transacciones |
+| GET | `/treasury/balance` | JWT | Balance + ingresos/gastos del mes |
+| POST | `/treasury/transactions` | JWT | Registrar movimiento + asiento |
 
 ### Analytics — `/analytics`
 
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
-| GET | `/analytics/revenue` | JWT | Ingresos por período |
 | GET | `/analytics/kpis` | JWT | KPIs del dashboard |
+| GET | `/analytics/sales` | JWT | Ventas por mes |
+| GET | `/analytics/sales-report` | JWT | Reporte con comparación de período |
+| GET | `/analytics/top-products` | JWT | Productos más vendidos |
+| GET | `/analytics/cash-flow` | JWT | Flujo de caja histórico + proyección |
+| GET | `/analytics/alerts` | JWT | Alertas de stock y facturas pendientes |
+| GET | `/analytics/export/invoices` | JWT | Exportar facturas CSV |
 
-### Health — `/health`
+### Bancolombia — `/integrations/bancolombia`
 
 | Método | Ruta | Auth | Descripción |
 |---|---|---|---|
-| GET | `/health` | ❌ | Estado del servidor y DB |
+| GET | `/integrations/bancolombia/config` | JWT | Configuración por tenant |
+| POST | `/integrations/bancolombia/config` | JWT | Guardar modo, cuenta, clientId |
+| POST | `/integrations/bancolombia/connect` | JWT | Generar URL de consentimiento OAuth |
+| GET | `/integrations/bancolombia/callback` | Pública | Recibir code y guardar tokens |
+| DELETE | `/integrations/bancolombia/disconnect` | JWT | Revocar y limpiar credenciales |
+| POST | `/integrations/bancolombia/sync` | JWT | Sincronizar extracto MT940/CAMT.053 |
+
+### Admin — `/admin`
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| GET | `/admin/stats` | Admin | Stats globales del sistema |
+| GET | `/admin/tenants` | Admin | Listar empresas |
+| GET | `/admin/tenants/:id` | Admin | Detalle con memberships y contadores |
+| PATCH | `/admin/tenants/:id` | Admin | Actualizar empresa |
+| PATCH | `/admin/tenants/:id/subscription` | Admin | Actualizar plan |
+| PATCH | `/admin/tenants/:id/status` | Admin | Activar / suspender |
+| POST | `/admin/tenants/:id/delete` | Admin | Eliminar empresa (requiere contraseña) |
+| POST | `/admin/companies` | Admin | Crear empresa + admin con clave temporal |
+| GET | `/admin/users` | Admin | Listar usuarios globales |
+| DELETE | `/admin/users/:id/data` | Admin | Anonimizar datos (derecho al olvido) |
+| GET | `/admin/audit-logs` | Admin | Últimos 100 eventos de auditoría |
+| GET | `/admin/compliance` | Admin | Dashboard de compliance |
+| POST | `/admin/compliance/access-review` | Admin | Ejecutar revisión de accesos manual |
+| GET | `/admin/breach-alerts` | Admin | Alertas de severidad error/critical |
+| POST | `/admin/breach-alerts/:id/notify` | Admin | Notificar brecha por email |
 
 ---
 
-## Modelos de base de datos
+## Seguridad
 
-### Diagrama de relaciones
-
-```mermaid
-erDiagram
-    User ||--o{ Membership : "pertenece a"
-    Tenant ||--o{ Membership : "tiene"
-    Tenant ||--o{ Product : "posee"
-    Tenant ||--o{ Invoice : "emite"
-    Tenant ||--o{ ThirdParty : "gestiona"
-    Tenant ||--o{ LedgerEntry : "registra"
-    Tenant ||--o{ InventoryMovement : "registra"
-    Tenant ||--o{ InventoryTransfer : "gestiona"
-    Tenant ||--o{ OcrRun : "ejecuta"
-    Tenant ||--|| Subscription : "tiene"
-
-    Invoice ||--o{ InvoiceItem : "contiene"
-    InvoiceItem }o--|| Product : "referencia"
-    Invoice }o--|| ThirdParty : "cliente"
-
-    LedgerEntry ||--o{ LedgerLine : "tiene"
-
-    User ||--o{ InventoryMovement : "genera"
-    User ||--|| UserSecurityProfile : "tiene"
-    User ||--o{ UserSession : "abre"
-    User ||--o{ RefreshToken : "posee"
-```
-
-### Descripción de modelos
-
-#### `User`
-Usuario del sistema. Puede ser `isSystemOwner` (acceso global) o usuario normal con memberships por tenant.
-
-| Campo | Tipo | Descripción |
-|---|---|---|
-| `id` | cuid | Identificador único |
-| `email` | String (unique) | Email de acceso |
-| `isSystemOwner` | Boolean | Acceso total al sistema |
-| `status` | `active / inactive / pending` | Estado del usuario |
-| `passwordHash` | String? | Hash bcrypt de la contraseña |
-
-#### `Tenant`
-Empresa/organización dentro del sistema (multi-tenant).
-
-| Campo | Tipo | Descripción |
-|---|---|---|
-| `nit` | String? | NIT de la empresa |
-| `dianStatus` | String? | Estado de habilitación DIAN |
-| `allowNegativeStock` | Boolean | Permitir stock negativo |
-| `securitySettings` | Json | Configuración de seguridad por tenant |
-
-#### `Membership`
-Relación Usuario ↔ Tenant con rol asignado (`owner`, `Administrador`, `Contador`, `Visor`, etc.).
-
-#### `Product`
-Producto del catálogo. Soporta ubicaciones múltiples (`stockByLocation: Json`), kits (`kitComponents`), tipos y unidades.
-
-#### `Invoice` / `InvoiceItem`
-Factura electrónica con estados DIAN: `draft → emitted → sent → accepted / cancelled`. Cada item referencia un producto del catálogo.
-
-#### `LedgerEntry` / `LedgerLine`
-Asiento contable doble entrada. Cada `LedgerEntry` agrupa múltiples `LedgerLine` con cuentas débito/crédito.
-
-#### `InventoryMovement`
-Registro de cada entrada o salida de stock, con lote, fecha de vencimiento y referencia al documento origen.
-
-#### `InventoryTransfer`
-Traslado de mercancía entre bodegas (`fromLocId → toLocId`) con estados: `pendiente → en_transito → completado / cancelado`.
-
-#### `UserSecurityProfile`
-Configuración de seguridad por usuario: 2FA (TOTP), bloqueo por intentos fallidos, historial de contraseñas, fingerprints confiables.
-
-#### `AuditEvent`
-Log inmutable de acciones críticas: entidad, acción, actor, severidad (`info / warning / error / critical`).
-
-#### `OcrRun`
-Resultado de procesamiento OCR con campos extraídos (`fields: Json`) y nivel de confianza.
-
-#### `DemoRequest`
-Solicitudes de demo desde la landing page con flujo de estados: `nuevo → contactado → demo_agendada → convertido`.
+- Rutas protegidas requieren `Authorization: Bearer <accessToken>`
+- Tenant activo en header `x-tenant-id`
+- `trust proxy 1` configurado — rate limiting y sesiones usan IP real del cliente
+- Rate limiting: 100 req/min · 1000 req/h por IP (guard global pendiente de activar)
+- Contraseñas hasheadas con bcrypt (12 rounds)
+- Refresh tokens almacenados como hash SHA-256, rotados en cada uso
+- Tokens Bancolombia cifrados en DB con clave del servidor
+- `client_secret` de Bancolombia nunca sale del backend
 
 ---
 
-## Comandos Prisma (PowerShell)
+## Modelos principales
+
+`User` · `Tenant` · `Membership` · `Product` · `Invoice` · `InvoiceItem` · `Purchase` · `PurchaseItem` · `Quote` · `QuoteItem` · `ThirdParty` · `LedgerEntry` · `LedgerLine` · `InventoryMovement` · `InventoryTransfer` · `Transaction` · `UserSession` · `RefreshToken` · `UserSecurityProfile` · `AuditEvent` · `OcrRun` · `Subscription` · `DemoRequest`
+
+---
+
+## Comandos Prisma
 
 ```powershell
-# Generar cliente tras cambios de schema
-npx prisma generate
-
-# Crear nueva migración
-npx prisma migrate dev --name nombre_migracion
-
-# Aplicar migraciones en producción
-npx prisma migrate deploy
-
-# Ver datos en interfaz visual
-npx prisma studio
-
-# Resetear base de datos (¡destructivo!)
-npx prisma migrate reset
+npx prisma generate          # regenerar cliente tras cambios de schema
+npx prisma migrate dev --name <nombre>   # nueva migración
+npx prisma migrate deploy    # aplicar en producción
+npx prisma studio            # interfaz visual
+npx prisma migrate reset     # resetear (destructivo)
 ```
 
 ---
@@ -371,22 +316,28 @@ Rol:      owner
 
 ---
 
-## Seguridad
+## Variables DIAN
 
-- Todas las rutas protegidas requieren `Authorization: Bearer <accessToken>`
-- El tenant activo se pasa en header `x-tenant-id`
-- Rate limiting: 100 req/min (short) y 1000 req/hora (long) por IP
-- RBAC implementado en guards — verificar rol antes de operaciones críticas
-- Contraseñas hasheadas con bcrypt (salt rounds: 12)
-- Refresh tokens rotados en cada uso y almacenados como hash SHA-256
+```env
+DIAN_TEST_WSDL_URL=https://vpfe-hab.dian.gov.co/WcfDianCustomerServices.svc?singleWsdl
+DIAN_TEST_ENDPOINT_URL=https://vpfe-hab.dian.gov.co/WcfDianCustomerServices.svc
+DIAN_PROD_WSDL_URL=https://vpfe.dian.gov.co/WcfDianCustomerServices.svc?singleWsdl
+DIAN_PROD_ENDPOINT_URL=https://vpfe.dian.gov.co/WcfDianCustomerServices.svc
+```
+
+## Variables Bancolombia
+
+```env
+BANCOLOMBIA_CLIENT_ID=<client-id>
+BANCOLOMBIA_CLIENT_SECRET=<del-vault>
+BANCOLOMBIA_AUTHORIZATION_URL=https://...
+BANCOLOMBIA_TOKEN_URL=https://...
+BANCOLOMBIA_SCOPE=<scope>
+BANCOLOMBIA_REDIRECT_URI=https://api.tudominio.com/integrations/bancolombia/callback
+BANCOLOMBIA_TOKEN_ENCRYPTION_SECRET=<clave-larga>
+BANCOLOMBIA_STATEMENT_SOURCE_URL=<url-opcional-extractos>
+```
 
 ---
 
-## Swagger
-
-Disponible en desarrollo en `http://localhost:3001/docs`.  
-Soporta autenticación Bearer para probar endpoints protegidos.
-
----
-
-*Última actualización: Mayo 2026 — Contex360 v0.1.0*
+*Contex360 v0.1.0 — Mayo 2026*
