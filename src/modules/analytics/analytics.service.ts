@@ -6,10 +6,21 @@ import { PrismaService } from '../database/prisma.service'
 export class AnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getDashboardKpis(tenantId: string) {
+  async getDashboardKpis(tenantId: string, from?: string, to?: string) {
+    const whereInvoice: any = { tenantId, status: 'emitted' };
+    if (from || to) {
+      whereInvoice.issuedAt = {};
+      if (from) whereInvoice.issuedAt.gte = new Date(from);
+      if (to) {
+        const toDate = new Date(to);
+        toDate.setHours(23, 59, 59, 999);
+        whereInvoice.issuedAt.lte = toDate;
+      }
+    }
+
     const [totalSales, stockStats, lowStockCount] = await Promise.all([
       this.prisma.invoice.aggregate({
-        where: { tenantId, status: 'emitted' },
+        where: whereInvoice,
         _sum: { total: true },
       }),
       this.prisma.product.aggregate({

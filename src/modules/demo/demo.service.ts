@@ -53,8 +53,10 @@ export class DemoService {
     });
 
     if (systemOwner) {
-      this.notificationService.sendDemoRequestEmail(data, systemOwner.email).catch((err) => {
-        console.error('Failed to send Email notification:', safeLogMessage(err));
+      setImmediate(() => {
+        this.notificationService.sendDemoRequestEmail(data, systemOwner.email).catch((err) => {
+          console.error('Failed to send Email notification:', safeLogMessage(err));
+        });
       });
     }
 
@@ -195,14 +197,16 @@ export class DemoService {
     });
 
     // Send Welcome Email with credentials to the final user in the background
-    this.notificationService.sendWelcomeCredentialsEmail({
-      email: result.user.email,
-      name: result.user.name,
-      tempPassword: result.tempPassword,
-      companyName: result.tenant.name,
-      prefix: result.tenant.prefix,
-    }).catch((err) => {
-      console.error('Failed to send Welcome Email:', safeLogMessage(err));
+    setImmediate(() => {
+      this.notificationService.sendWelcomeCredentialsEmail({
+        email: result.user.email,
+        name: result.user.name,
+        tempPassword: result.tempPassword,
+        companyName: result.tenant.name,
+        prefix: result.tenant.prefix,
+      }).catch((err) => {
+        console.error('Failed to send Welcome Email:', safeLogMessage(err));
+      });
     });
 
     return {

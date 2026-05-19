@@ -13,8 +13,12 @@ export class AnalyticsController {
 
   @Get('dashboard')
   @Permissions('view_reports')
-  getDashboardKpis(@TenantId() tenantId: string) {
-    return this.analyticsService.getDashboardKpis(tenantId);
+  getDashboardKpis(
+    @TenantId() tenantId: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.analyticsService.getDashboardKpis(tenantId, from, to);
   }
 
   @Get('alerts')

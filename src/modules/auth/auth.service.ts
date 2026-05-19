@@ -727,7 +727,11 @@ export class AuthService {
         },
       })
 
-      this.notificationService.sendPasswordResetEmail(user.email, user.name, token)
+      setImmediate(() => {
+        this.notificationService.sendPasswordResetEmail(user.email, user.name, token).catch((err) => {
+          console.error('Failed to send Password Reset Email:', err);
+        });
+      });
     }
 
     return {

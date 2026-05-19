@@ -40,6 +40,8 @@ export class NotificationService {
           user: this.config.get<string>('SMTP_USER'),
           pass: this.config.get<string>('SMTP_PASS'),
         },
+        connectionTimeout: 5000,
+        socketTimeout: 5000,
       })
     } else {
       this.logger.warn('SMTP no configurado. Las notificaciones de brecha solo se registraran en logs.')
