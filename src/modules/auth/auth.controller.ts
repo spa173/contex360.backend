@@ -4,7 +4,7 @@ import { AUTH_COOKIE_NAME, AUTH_REFRESH_COOKIE_NAME, isOAuthProvider } from './a
 import { AuthGuard } from './auth.guard'
 import { AuthService } from './auth.service'
 import { TotpService } from './totp.service'
-import { ChangePasswordDto, LoginRequestDto, RefreshTokenDto, UpdateProfileDto } from './auth.types'
+import { ChangePasswordDto, ForgotPasswordDto, LoginRequestDto, RefreshTokenDto, ResetPasswordDto, UpdateProfileDto } from './auth.types'
 import type { AuthenticatedRequest } from './auth.types'
 import { getDefaultFrontendCallbackUrl } from './oauth.providers'
 
@@ -138,6 +138,16 @@ export class AuthController {
       setAuthCookies(response, result.accessToken, result.refreshToken)
     }
     return result
+  }
+
+  @Post('forgot-password')
+  async forgotPassword(@Body() body: ForgotPasswordDto) {
+    return this.authService.forgotPassword(body.email)
+  }
+
+  @Post('reset-password')
+  async resetPassword(@Body() body: ResetPasswordDto) {
+    return this.authService.resetPassword(body.token, body.newPassword)
   }
 
   @Post('refresh')

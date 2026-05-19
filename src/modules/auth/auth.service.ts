@@ -33,6 +33,7 @@ import {
   resolveAllowedRedirectTo,
   OAuthProfileSnapshot,
 } from './oauth.providers'
+import { NotificationService } from '../notification/notification.service'
 
 type UserWithAuthRelations = Prisma.UserGetPayload<{
   include: {
@@ -81,6 +82,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly totpService: TotpService,
+    private readonly notificationService: NotificationService,
   ) {}
 
   async login(credentials: LoginRequestDto, context: AuthRequestContext): Promise<AuthResponseSnapshot | TotpRequiredResponse | PasswordExpiredResponse> {
@@ -695,6 +697,113 @@ export class AuthService {
       trialEndsAt,
       invoicesThisMonth: subscription?.invoicesThisMonth ?? 0,
       limits,
+    }
+  }
+
+  async forgotPassword(emailStr: string): Promise<{ ok: boolean; message: string }> {
+    const email = normalizeEmail(emailStr)
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+      include: { securityProfile: true },
+    })
+
+    if (user && user.status === UserStatus.active) {
+      const requestedAt = new Date()
+      const token = await this.jwtService.signAsync(
+        { sub: user.id, purpose: 'reset-password' },
+        { expiresIn: '15m' }
+      )
+
+      await this.prisma.userSecurityProfile.upsert({
+        where: { userId: user.id },
+        create: {
+          ...this.buildDefaultSecurityProfile(user.id, requestedAt),
+          passwordResetRequired: true,
+          resetRequestedAt: requestedAt,
+        },
+        update: {
+          passwordResetRequired: true,
+          resetRequestedAt: requestedAt,
+        },
+      })
+
+      await this.notificationService.sendPasswordResetEmail(user.email, user.name, token)
+    }
+
+    return {
+      ok: true,
+      message: 'Si el correo existe y está activo, hemos enviado un enlace para restablecer tu contraseña.',
+    }
+  }
+
+  async resetPassword(token: string, newPasswordStr: string): Promise<{ ok: boolean; message: string }> {
+    try {
+      const payload = await this.jwtService.verifyAsync<{
+        sub?: string
+        purpose?: string
+        iat?: number
+      }>(token)
+
+      if (payload.purpose !== 'reset-password' || !payload.sub) {
+        throw new Error('Token purpose mismatch')
+      }
+
+      const user = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        include: { securityProfile: true },
+      })
+      if (!user || user.status !== UserStatus.active) {
+        throw new Error('Usuario inválido')
+      }
+
+      const requestedAt = user.securityProfile?.resetRequestedAt
+      const tokenIssuedAt = payload.iat ? new Date(payload.iat * 1000) : null
+      if (requestedAt && (!tokenIssuedAt || tokenIssuedAt.getTime() + 1000 < requestedAt.getTime())) {
+        throw new Error('Token desactualizado')
+      }
+
+      const newPassword = String(newPasswordStr).trim()
+      const passwordHash = await hash(newPassword, 10)
+      const now = new Date()
+
+      await this.prisma.$transaction([
+        this.prisma.user.update({
+          where: { id: user.id },
+          data: { passwordHash },
+        }),
+        this.prisma.userSecurityProfile.upsert({
+          where: { userId: user.id },
+          create: {
+            ...this.buildDefaultSecurityProfile(user.id, now),
+            passwordUpdatedAt: now,
+            passwordResetRequired: false,
+            resetRequestedAt: null,
+            passwordHistory: [],
+            trustedFingerprints: [],
+          },
+          update: {
+            passwordUpdatedAt: now,
+            passwordResetRequired: false,
+            resetRequestedAt: null,
+            trustedFingerprints: [],
+          },
+        }),
+        this.prisma.refreshToken.updateMany({
+          where: { userId: user.id, revokedAt: null },
+          data: { revokedAt: now },
+        }),
+        this.prisma.userSession.updateMany({
+          where: { userId: user.id, revokedAt: null },
+          data: {
+            revokedAt: now,
+            revokedBy: 'Restablecimiento de contraseña',
+          },
+        }),
+      ])
+
+      return { ok: true, message: 'Tu contraseña ha sido restablecida exitosamente.' }
+    } catch (e) {
+      throw new UnauthorizedException('El enlace es inválido o ha expirado. Por favor solicita uno nuevo.')
     }
   }
 }

@@ -259,4 +259,63 @@ export class NotificationService {
 </body>
 </html>`
   }
+  async sendPasswordResetEmail(email: string, name: string, token: string): Promise<void> {
+    const subject = 'Recuperación de contraseña — Contex360'
+    const html = this.buildPasswordResetHtml({ email, name, token })
+
+    if (!this.transporter) {
+      this.logger.warn(
+        `RESET PASSWORD (sin email): ${safeLogFragment(subject)} | ${safeLogFragment(email)} | enlace de recuperacion no enviado`,
+      )
+      return
+    }
+
+    const from = this.config.get<string>('SMTP_FROM') ?? 'no-reply@contex360.com'
+
+    await this.transporter.sendMail({ from, to: email, subject, html }).catch((err) =>
+      this.logger.error(`Error enviando correo de reset a ${safeLogFragment(email)}: ${safeLogFragment(err)}`),
+    )
+
+    this.logger.log(`Correo de recuperación enviado a ${email}.`)
+  }
+
+  private buildPasswordResetHtml(data: { email: string; name: string; token: string }): string {
+    const resetUrl = `https://contex360fronted.vercel.app/reset-password?token=${data.token}`
+
+    return `
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8" /></head>
+<body style="font-family:sans-serif;background:#f8fafc;color:#1e293b;padding:32px;">
+  <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px;border:1px solid #e2e8f0;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);">
+    <div style="text-align:center;margin-bottom:24px;">
+      <h1 style="color:#2563eb;margin:0;">Contex360</h1>
+    </div>
+    
+    <h2 style="color:#1e293b;margin-top:0;">Hola, ${data.name || 'usuario'}</h2>
+    <p style="color:#475569;font-size:16px;line-height:1.6;">
+      Hemos recibido una solicitud para restablecer la contraseña de tu cuenta asociada al correo <strong>${data.email}</strong>.
+    </p>
+    
+    <p style="text-align:center;margin:32px 0;">
+      <a href="${resetUrl}" style="background:#2563eb;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;">Restablecer contraseña</a>
+    </p>
+
+    <div style="background:#fff7ed;border-radius:8px;padding:16px;border:1px solid #fdba74;margin-bottom:24px;">
+      <p style="margin:0;font-size:14px;color:#9a3412;">
+        <strong>Nota de seguridad:</strong> Este enlace expirará en 15 minutos. Si no solicitaste este cambio, puedes ignorar este correo de forma segura.
+      </p>
+    </div>
+
+    <hr style="border:0;border-top:1px solid #e2e8f0;margin:32px 0;" />
+    
+    <p style="color:#94a3b8;font-size:12px;text-align:center;line-height:1.5;">
+      Si tienes problemas, copia y pega el siguiente enlace en tu navegador:<br/>
+      <a href="${resetUrl}" style="color:#2563eb;word-break:break-all;">${resetUrl}</a><br/><br/>
+      &copy; 2026 Contex360 · Sistema de Gestión Financiera
+    </p>
+  </div>
+</body>
+</html>`
+  }
 }

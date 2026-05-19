@@ -54,6 +54,24 @@ export class UpdateProfileDto {
   title?: string
 }
 
+export class ForgotPasswordDto {
+  @Transform(({ value }) => String(value || '').trim().toLowerCase())
+  @IsEmail({}, { message: 'El formato del email es inválido.' })
+  email!: string
+}
+
+export class ResetPasswordDto {
+  @Transform(({ value }) => String(value || '').trim())
+  @IsString({ message: 'El token es requerido.' })
+  @MinLength(10, { message: 'Token inválido.' })
+  token!: string
+
+  @Transform(({ value }) => String(value || '').trim())
+  @IsString()
+  @MinLength(8, { message: 'La nueva contraseña debe tener al menos 8 caracteres.' })
+  newPassword!: string
+}
+
 export interface AuthRequestContext {
   ip: string
   userAgent: string
