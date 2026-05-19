@@ -18,7 +18,9 @@ import {
   PasswordExpiredResponse,
   ChangePasswordDto,
   UpdateProfileDto,
+  PublicSubscriptionSnapshot,
 } from './auth.types'
+import { PLANS } from '../subscriptions/plans.config'
 import { ROLE_DEFINITIONS } from './rbac.constants'
 import { TotpService } from './totp.service'
 import { PrismaService } from '../database/prisma.service'
@@ -248,15 +250,20 @@ export class AuthService {
       data: { lastSeenAt: now },
     })
 
+    const subscription = activeTenant
+      ? await this.getSubscriptionSnapshot(activeTenant.id)
+      : undefined
+
     return {
       ok: true,
       message: 'Sesion activa.',
       user: this.mapUserSnapshot(user),
       session: this.mapSessionSnapshot({ ...session, lastSeenAt: now }),
-      activeTenantId: activeTenant.id,
+      activeTenantId: activeTenant?.id || 'system',
       accessibleTenants: user.isSystemOwner 
         ? (await this.prisma.tenant.findMany()).map(t => this.mapTenantSnapshot(t))
         : user.memberships.map((membership) => this.mapTenantSnapshot(membership.tenant)),
+      subscription,
       memberships: user.memberships.map((membership) => {
         const roleDef = ROLE_DEFINITIONS.find((r) => r.id === membership.role)
         return {
@@ -345,6 +352,10 @@ export class AuthService {
       data: { tokenHash, userId: user.id, sessionId: session.id, expiresAt },
     })
 
+    const subscription = activeTenant
+      ? await this.getSubscriptionSnapshot(activeTenant.id)
+      : undefined
+
     return {
       ok: true,
       message: 'Sesion iniciada.',
@@ -356,6 +367,7 @@ export class AuthService {
       accessibleTenants: user.isSystemOwner
         ? (await this.prisma.tenant.findMany()).map(t => this.mapTenantSnapshot(t))
         : user.memberships.map((membership) => this.mapTenantSnapshot(membership.tenant)),
+      subscription,
       memberships: user.memberships.map((membership) => {
         const roleDef = ROLE_DEFINITIONS.find((r) => r.id === membership.role)
         return {
@@ -661,6 +673,27 @@ export class AuthService {
       lastSeenAt: toIso(session.lastSeenAt) || new Date().toISOString(),
       revokedAt: toIso(session.revokedAt),
       revokedBy: session.revokedBy || null,
+    }
+  }
+
+  private async getSubscriptionSnapshot(tenantId: string): Promise<PublicSubscriptionSnapshot | undefined> {
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { tenantId },
+    })
+
+    const planType = subscription?.planType || 'starter'
+    const active = subscription?.active ?? true
+    const trialEndsAt = subscription?.trialEndsAt ? subscription.trialEndsAt.toISOString() : null
+
+    const planTypeLower = planType.toLowerCase()
+    const planKey = (planTypeLower in PLANS) ? (planTypeLower as 'starter' | 'pyme' | 'enterprise') : 'starter'
+    const limits = PLANS[planKey]
+
+    return {
+      planType,
+      active,
+      trialEndsAt,
+      limits,
     }
   }
 }

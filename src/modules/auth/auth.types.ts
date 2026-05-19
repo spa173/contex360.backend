@@ -123,6 +123,20 @@ export interface PublicSessionSnapshot {
 
 
 
+export interface PublicSubscriptionSnapshot {
+  planType: string
+  active: boolean
+  trialEndsAt: string | null
+  limits: {
+    name: string
+    priceMonthly: number
+    priceAnnual: number
+    maxUsers: number | null
+    maxInvoicesPerMonth: number | null
+    modules: string[]
+  }
+}
+
 export interface AuthResponseSnapshot {
   ok: true
   message: string
@@ -132,6 +146,7 @@ export interface AuthResponseSnapshot {
   session: PublicSessionSnapshot
   activeTenantId: string
   accessibleTenants: PublicTenantSnapshot[]
+  subscription?: PublicSubscriptionSnapshot
   memberships: {
     tenantId: string
     role: string
