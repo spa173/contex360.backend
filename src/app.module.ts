@@ -25,6 +25,7 @@ import { TreasuryModule } from './modules/treasury/treasury.module'
 import { QuotesModule } from './modules/quotes/quotes.module'
 import { SupportModule } from './modules/support/support.module'
 import { IntegrationsModule } from './modules/integrations/integrations.module'
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module'
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { IntegrationsModule } from './modules/integrations/integrations.module'
     QuotesModule,
     SupportModule,
     IntegrationsModule,
+    SubscriptionsModule,
   ],
   controllers: [AppController],
   providers: [
