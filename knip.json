@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
-  "entry": ["src/main.ts"],
   "project": ["src/**/*.ts"],
-  "ignore": ["_archive_scripts/**", "tests-local/**"]
+  "ignoreDependencies": ["ts-node"],
+  "ignoreExportsUsedInFile": true
 }
