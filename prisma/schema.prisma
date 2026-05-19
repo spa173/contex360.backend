@@ -665,6 +665,7 @@ model Subscription {
   planType          String
   active            Boolean  @default(true)
   trialEndsAt       DateTime?
+  renewsAt          DateTime?
   invoicesThisMonth Int      @default(0)
 
   tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)

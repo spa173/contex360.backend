@@ -29,6 +29,11 @@ export class SubscriptionsController {
     return this.subscriptionsService.getCurrentSubscription(tenantId);
   }
 
+  @Get('usage')
+  getUsage(@TenantId() tenantId: string) {
+    return this.subscriptionsService.getUsage(tenantId);
+  }
+
   @Post('checkout')
   async checkout(@TenantId() tenantId: string, @Body() dto: CheckoutDto) {
     const { planType, billing } = dto;
@@ -59,6 +64,15 @@ export class SubscriptionsController {
     if (!sku) return { received: true };
 
     const [planType, billing, tenantId] = sku.split('_');
+    
+    // Calculate renewsAt
+    const renewsAt = new Date();
+    if (billing === 'annual') {
+      renewsAt.setDate(renewsAt.getDate() + 365);
+    } else {
+      renewsAt.setDate(renewsAt.getDate() + 30);
+    }
+
     // Activate or update subscription in DB
     await this.subscriptionsService['prisma'].subscription.upsert({
       where: { tenantId },
@@ -67,12 +81,14 @@ export class SubscriptionsController {
         planType: planType as any,
         active: true,
         trialEndsAt: null,
+        renewsAt,
         invoicesThisMonth: 0,
       },
       update: {
         active: true,
         planType: planType as any,
         trialEndsAt: null,
+        renewsAt,
       },
     });
     return { received: true };

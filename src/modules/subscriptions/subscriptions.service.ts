@@ -43,4 +43,35 @@ export class SubscriptionsService {
       limits,
     };
   }
+
+  async getUsage(tenantId: string) {
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { tenantId },
+    });
+
+    const usersCount = await this.prisma.membership.count({
+      where: { tenantId },
+    });
+
+    if (!subscription) {
+      return {
+        planType: 'starter',
+        invoicesThisMonth: 0,
+        usersCount,
+        renewsAt: null,
+        limits: PLANS.starter,
+      };
+    }
+
+    const planTypeLower = subscription.planType.toLowerCase();
+    const planKey = (planTypeLower in PLANS) ? (planTypeLower as 'starter' | 'pyme' | 'enterprise') : 'starter';
+
+    return {
+      planType: subscription.planType,
+      invoicesThisMonth: subscription.invoicesThisMonth,
+      usersCount,
+      renewsAt: subscription.renewsAt,
+      limits: PLANS[planKey],
+    };
+  }
 }

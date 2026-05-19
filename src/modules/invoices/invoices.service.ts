@@ -159,6 +159,12 @@ export class InvoicesService {
         }
       }
 
+      // 5. Update Subscription Usage
+      await tx.subscription.updateMany({
+        where: { tenantId },
+        data: { invoicesThisMonth: { increment: 1 } },
+      })
+
       return invoice
     })
   }
