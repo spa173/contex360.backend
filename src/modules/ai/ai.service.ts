@@ -1,14 +1,15 @@
 import { Injectable } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import Groq from 'groq-sdk'
-import * as pdfParse from 'pdf-parse'
+import * as pdfParseModule from 'pdf-parse'
+const pdfParse: any = (pdfParseModule as any).default || pdfParseModule
 import { Prisma, ThirdPartyKind } from '@prisma/client'
 import { PrismaService } from '../database/prisma.service'
 import { AnalyticsService } from '../analytics/analytics.service'
 import { NotificationService } from '../notification/notification.service'
 import { PERSONAL_ASSISTANT_PROMPT } from './ai.prompts'
 
-const MODEL = 'llama-3.3-70b-versatile'
+const MODEL = 'llama-3.1-8b-instant'
 
 // Herramientas en formato OpenAI (compatible con Groq)
 const TOOLS: Groq.Chat.ChatCompletionTool[] = [
