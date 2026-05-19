@@ -179,9 +179,13 @@ export class AnalyticsService {
         status: { in: ['emitted', 'sent'] },
       },
     });
+    const ocrRunsCount = await this.prisma.ocrRun.count({
+      where: { tenantId },
+    });
     return {
       lowStockAlerts: Number(lowStockCount[0]?.count ?? 0),
       pendingInvoices,
+      ocrRunsCount,
     };
   }
 
@@ -260,5 +264,152 @@ export class AnalyticsService {
       historical: historicalPoints,
       projected: projectedPoints,
     }
+  }
+
+  async getOcrRuns(tenantId: string) {
+    return this.prisma.ocrRun.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async simulateOcrRun(tenantId: string) {
+    const mockInvoices = [
+      {
+        source: 'factura_exito_1092.pdf',
+        sourcePreview: 'https://images.unsplash.com/photo-1554415707-6e8cfc93fe23?w=300',
+        confidence: 0.96,
+        fields: {
+          vendor: 'Almacenes Éxito S.A.',
+          nit: '890.900.608-9',
+          date: new Date().toISOString().split('T')[0],
+          subtotal: 150000,
+          tax: 28500,
+          total: 178500,
+          items: [
+            { description: 'Papel Impresora Resma A4', qty: 5, price: 20000, total: 100000 },
+            { description: 'Bolígrafos Gel Negro (Caja)', qty: 2, price: 25000, total: 50000 },
+          ],
+        },
+      },
+      {
+        source: 'recibo_coordinadora_9918.png',
+        sourcePreview: 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=300',
+        confidence: 0.91,
+        fields: {
+          vendor: 'Coordinadora Mercantil S.A.',
+          nit: '890.901.233-1',
+          date: new Date(Date.now() - 86400000).toISOString().split('T')[0],
+          subtotal: 45000,
+          tax: 8550,
+          total: 53550,
+          items: [
+            { description: 'Envío de muestras comerciales nacional', qty: 1, price: 45000, total: 45000 },
+          ],
+        },
+      },
+      {
+        source: 'factura_d1_332.pdf',
+        sourcePreview: 'https://images.unsplash.com/photo-1542838132-92c53300491e?w=300',
+        confidence: 0.98,
+        fields: {
+          vendor: 'Koba Colombia S.A.S. (D1)',
+          nit: '900.283.473-5',
+          date: new Date(Date.now() - 172800000).toISOString().split('T')[0],
+          subtotal: 82000,
+          tax: 0,
+          total: 82000,
+          items: [
+            { description: 'Café Molido Premium 500g', qty: 4, price: 12000, total: 48000 },
+            { description: 'Azúcar Refinada 1kg', qty: 10, price: 3400, total: 34000 },
+          ],
+        },
+      },
+    ];
+
+    const selected = mockInvoices[Math.floor(Math.random() * mockInvoices.length)];
+
+    return this.prisma.ocrRun.create({
+      data: {
+        tenantId,
+        source: selected.source,
+        sourcePreview: selected.sourcePreview,
+        confidence: selected.confidence,
+        fields: selected.fields,
+      },
+    });
+  }
+
+  async approveOcrRun(tenantId: string, id: string) {
+    const ocrRun = await this.prisma.ocrRun.findUnique({
+      where: { id, tenantId },
+    });
+
+    if (!ocrRun) throw new Error('OCR run not found');
+
+    const fields = ocrRun.fields as any;
+    const vendorName = fields.vendor || 'Proveedor OCR';
+    const nit = fields.nit || '123456789-0';
+    const total = Number(fields.total || 0);
+    const subtotal = Number(fields.subtotal || total);
+    const tax = Number(fields.tax || 0);
+
+    let provider = await this.prisma.thirdParty.findFirst({
+      where: { tenantId, nit, kind: 'provider' },
+    });
+
+    if (!provider) {
+      provider = await this.prisma.thirdParty.create({
+        data: {
+          tenantId,
+          name: vendorName,
+          nit,
+          email: `${vendorName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'proveedor'}@example.com`,
+          kind: 'provider',
+          phone: '3001234567',
+          address: 'Dirección OCR',
+          city: 'Bogotá',
+        },
+      });
+    }
+
+    const nextNumber = 1000 + Math.floor(Math.random() * 9000);
+
+    const purchase = await this.prisma.purchase.create({
+      data: {
+        tenantId,
+        number: `CO-${nextNumber}`,
+        providerId: provider.id,
+        providerName: provider.name,
+        status: 'registered',
+        subtotal,
+        tax,
+        total,
+        notes: `Registrado automáticamente mediante OCR de IA (${ocrRun.source})`,
+      },
+    });
+
+    await this.prisma.transaction.create({
+      data: {
+        tenantId,
+        type: 'EXPENSE',
+        amount: total,
+        description: `Gasto de Compra ${purchase.number} (${provider.name})`,
+        category: 'CAJA',
+        reference: purchase.id,
+      },
+    });
+
+    await this.prisma.ocrRun.delete({
+      where: { id },
+    });
+
+    return purchase;
+  }
+
+  async deleteOcrRun(tenantId: string, id: string) {
+    return this.prisma.ocrRun.delete({
+      where: { id, tenantId },
+    });
   }
 }

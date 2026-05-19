@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards, Res } from '@nestjs/common'
+import { Controller, Get, Post, Delete, Param, Query, UseGuards, Res } from '@nestjs/common'
 import { AnalyticsService } from './analytics.service'
 import { Permissions } from '../auth/permissions.decorator'
 import { AuthGuard } from '../auth/auth.guard'
@@ -61,5 +61,29 @@ export class AnalyticsController {
     @Query('limit') limit?: string,
   ) {
     return this.analyticsService.getTopProducts(tenantId, parseInt(limit || '10'))
+  }
+
+  @Get('ocr-runs')
+  @Permissions('run_ocr')
+  getOcrRuns(@TenantId() tenantId: string) {
+    return this.analyticsService.getOcrRuns(tenantId);
+  }
+
+  @Post('ocr-runs/simulate')
+  @Permissions('run_ocr')
+  simulateOcrRun(@TenantId() tenantId: string) {
+    return this.analyticsService.simulateOcrRun(tenantId);
+  }
+
+  @Post('ocr-runs/:id/approve')
+  @Permissions('run_ocr')
+  approveOcrRun(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.analyticsService.approveOcrRun(tenantId, id);
+  }
+
+  @Delete('ocr-runs/:id')
+  @Permissions('run_ocr')
+  deleteOcrRun(@TenantId() tenantId: string, @Param('id') id: string) {
+    return this.analyticsService.deleteOcrRun(tenantId, id);
   }
 }
