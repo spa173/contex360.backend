@@ -53,7 +53,7 @@ export class DemoService {
     });
 
     if (systemOwner) {
-      await this.notificationService.sendDemoRequestEmail(data, systemOwner.email).catch((err) => {
+      this.notificationService.sendDemoRequestEmail(data, systemOwner.email).catch((err) => {
         console.error('Failed to send Email notification:', safeLogMessage(err));
       });
     }
@@ -194,8 +194,8 @@ export class DemoService {
       return { tenant, user, tempPassword };
     });
 
-    // Send Welcome Email with credentials to the final user
-    await this.notificationService.sendWelcomeCredentialsEmail({
+    // Send Welcome Email with credentials to the final user in the background
+    this.notificationService.sendWelcomeCredentialsEmail({
       email: result.user.email,
       name: result.user.name,
       tempPassword: result.tempPassword,
