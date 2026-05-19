@@ -176,7 +176,7 @@ export class AnalyticsService {
     const pendingInvoices = await this.prisma.invoice.count({
       where: {
         tenantId,
-        NOT: { status: { in: ['paid', 'cancelled'] } },
+        status: { in: ['emitted', 'sent'] },
       },
     });
     return {
