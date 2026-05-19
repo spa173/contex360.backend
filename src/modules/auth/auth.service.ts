@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common'
 import { JwtService } from '@nestjs/jwt'
-import { Prisma, User, UserSession, UserStatus } from '@prisma/client'
+import { AuditSeverity, Prisma, User, UserSession, UserStatus } from '@prisma/client'
 import { compare, hash } from 'bcryptjs'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import {
@@ -307,9 +307,15 @@ export class AuthService {
     const activeTenant = await this.resolveActiveTenant(user, activeTenantId)
     const session = await this.createSession(user, activeTenant?.id || 'system', context, now)
 
+    const policyData: Prisma.UserUpdateInput = { lastLoginAt: now }
+    if (!user.policyAcceptedAt) {
+      policyData.policyAcceptedAt = now
+      policyData.policyVersion = 'v1.0 (Ley 1581)'
+    }
+
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { lastLoginAt: now },
+      data: policyData,
     })
 
     await this.prisma.userSecurityProfile.upsert({
@@ -477,6 +483,19 @@ export class AuthService {
         ? new Date(Date.now() + policy.lockoutMinutes * 60 * 1000)
         : null
 
+    if (lockedUntil) {
+      await this.prisma.auditEvent.create({
+        data: {
+          entity: 'autenticacion',
+          action: 'Cuenta Bloqueada por Fuerza Bruta',
+          description: `El usuario ${user.email} ha sido bloqueado temporalmente por superar el límite de ${policy.failedAttemptsThreshold} intentos de inicio de sesión fallidos.`,
+          actor: 'Sistema de Seguridad ISO 27001',
+          actorUserId: user.id,
+          severity: AuditSeverity.critical,
+        },
+      })
+    }
+
     await this.prisma.userSecurityProfile.upsert({
       where: { userId: user.id },
       update: {
@@ -573,8 +592,26 @@ export class AuthService {
     })
     if (!user) throw new UnauthorizedException('Usuario no encontrado.')
 
+    if (dto.currentPassword === dto.newPassword) {
+      throw new UnauthorizedException('La nueva contraseña no puede ser igual a la contraseña actual.')
+    }
+
     const matches = user.passwordHash ? await compare(dto.currentPassword, user.passwordHash) : false
     if (!matches) throw new UnauthorizedException('La contrasena actual es incorrecta.')
+
+    // Enforce ISO/IEC 27001 Control A.9.4.3: Prevent password reuse
+    const history = (user.securityProfile?.passwordHistory || []) as string[]
+    for (const historicalHash of history) {
+      const isReused = await compare(dto.newPassword, historicalHash)
+      if (isReused) {
+        throw new UnauthorizedException(
+          'La nueva contraseña coincide con una de tus contraseñas anteriores. Por políticas de seguridad de la norma ISO/IEC 27001, no se permite reutilizar contraseñas recientes.'
+        )
+      }
+    }
+
+    const currentHash = user.passwordHash || ''
+    const updatedHistory = [currentHash, ...history].slice(0, 5)
 
     const newHash = await hash(dto.newPassword, 12)
     await this.prisma.$transaction([
@@ -584,10 +621,13 @@ export class AuthService {
         create: {
           userId,
           passwordUpdatedAt: new Date(),
-          passwordHistory: [],
+          passwordHistory: updatedHistory,
           trustedFingerprints: [],
         },
-        update: { passwordUpdatedAt: new Date() },
+        update: { 
+          passwordUpdatedAt: new Date(),
+          passwordHistory: updatedHistory,
+        },
       }),
     ])
 

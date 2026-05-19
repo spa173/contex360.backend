@@ -94,6 +94,8 @@ model User {
   passwordSalt      String?
   deactivateAt      DateTime?
   reassignToUserId  String?
+  policyAcceptedAt  DateTime?
+  policyVersion     String?
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
   memberships       Membership[]
