@@ -44,6 +44,15 @@ export class DianController {
   }
 
   /**
+   * Obtiene la configuración DIAN del tenant
+   */
+  @Get('config')
+  @Permissions('view_billing')
+  async getConfig(@TenantId() tenantId: string) {
+    return this.dianService.getConfig(tenantId)
+  }
+
+  /**
    * Actualiza configuración DIAN del tenant
    */
   @Post('config')
@@ -73,6 +82,7 @@ export class DianController {
       }
     }
 
-    return { success: true, updated: Object.keys(updateData) }
+    const tenant = await this.dianService.updateConfig(tenantId, updateData)
+    return { success: true, updated: Object.keys(updateData), tenant }
   }
 }

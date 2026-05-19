@@ -338,4 +338,32 @@ export class DianService {
 
     return this.checkInvoiceStatus(dianEvent.cufe, tenantId)
   }
+
+  /**
+   * Obtiene la configuración DIAN de un tenant
+   */
+  async getConfig(tenantId: string) {
+    return this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        dianEnvironment: true,
+        dianSoftwareId: true,
+        dianSoftwarePin: true,
+        dianNit: true,
+        dianTestSetId: true,
+        dianCertificate: true,
+        dianCertificatePassword: true,
+      } as any,
+    })
+  }
+
+  /**
+   * Actualiza la configuración DIAN de un tenant
+   */
+  async updateConfig(tenantId: string, data: any) {
+    return this.prisma.tenant.update({
+      where: { id: tenantId },
+      data,
+    })
+  }
 }
