@@ -141,6 +141,39 @@ sequenceDiagram
 | POST | `/auth/logout` | JWT | Revocar sesión |
 | GET | `/auth/sessions` | JWT | Sesiones activas del usuario |
 
+### Integraciones Bancolombia — `/integrations/bancolombia`
+
+| Método | Ruta | Auth | Descripción |
+|---|---|---|---|
+| GET | `/integrations/bancolombia/config` | JWT | Lee la configuración por tenant |
+| POST | `/integrations/bancolombia/config` | JWT | Guarda modo, cuenta, clientId y metadatos |
+| POST | `/integrations/bancolombia/connect` | JWT | Genera la URL de consentimiento OAuth |
+| GET | `/integrations/bancolombia/callback` | Pública | Recibe el `code` y guarda tokens |
+| DELETE | `/integrations/bancolombia/disconnect` | JWT | Revoca y limpia credenciales |
+| POST | `/integrations/bancolombia/sync` | JWT | Sincroniza extractos o registra la última revisión |
+
+### Notas de producto Bancolombia
+
+- Open Finance valida titularidad y consentimiento, pero no entrega movimientos ni saldos.
+- Para conciliación automática se deben importar extractos empresariales o exponer una fuente de movimientos.
+- Los tokens de Bancolombia se guardan cifrados en la base de datos con una clave del servidor.
+- El `client secret` nunca debe salir del backend.
+- El endpoint `POST /integrations/bancolombia/sync` acepta un archivo MT940 o CAMT.053 enviado por el frontend, o bien una lista de movimientos ya normalizados.
+- Si no se sube archivo, el backend puede leer una fuente remota indicada por `BANCOLOMBIA_STATEMENT_SOURCE_URL`.
+
+### Variables Bancolombia en producción
+
+```env
+BANCOLOMBIA_CLIENT_ID=<client-id-entregado-por-bancolombia>
+BANCOLOMBIA_CLIENT_SECRET=<client-secret-del-vault>
+BANCOLOMBIA_AUTHORIZATION_URL=https://...
+BANCOLOMBIA_TOKEN_URL=https://...
+BANCOLOMBIA_SCOPE=<scope-indicado-por-el-portal>
+BANCOLOMBIA_REDIRECT_URI=https://api.tudominio.com/integrations/bancolombia/callback
+BANCOLOMBIA_TOKEN_ENCRYPTION_SECRET=<clave-larga-aleatoria>
+BANCOLOMBIA_STATEMENT_SOURCE_URL=<url-opcional-de-extractos>
+```
+
 ### Productos — `/products`
 
 | Método | Ruta | Auth | Descripción |
