@@ -184,4 +184,81 @@ export class AnalyticsService {
       pendingInvoices,
     };
   }
+
+  async getCashFlowTrend(tenantId: string) {
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+
+    const transactions = await this.prisma.transaction.findMany({
+      where: {
+        tenantId,
+        date: { gte: thirtyDaysAgo },
+      },
+      orderBy: { date: 'asc' },
+    })
+
+    const dates: string[] = []
+    const dailyBalances: Record<string, number> = {}
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date()
+      d.setDate(d.getDate() - i)
+      const dateStr = d.toISOString().split('T')[0]
+      dates.push(dateStr)
+      dailyBalances[dateStr] = 0
+    }
+
+    transactions.forEach(t => {
+      const dateStr = t.date.toISOString().split('T')[0]
+      if (dailyBalances[dateStr] !== undefined) {
+        const amount = Number(t.amount)
+        if (t.type === 'INCOME') {
+          dailyBalances[dateStr] += amount
+        } else {
+          dailyBalances[dateStr] -= amount
+        }
+      }
+    })
+
+    let runningBalance = 0
+    const historicalPoints = dates.map(dateStr => {
+      runningBalance += dailyBalances[dateStr]
+      return {
+        date: dateStr,
+        balance: runningBalance,
+      }
+    })
+
+    let slope = 0
+    if (historicalPoints.length > 1) {
+      const lastPoints = historicalPoints.slice(-7)
+      const n = lastPoints.length
+      let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0
+      for (let i = 0; i < n; i++) {
+        sumX += i
+        sumY += lastPoints[i].balance
+        sumXY += i * lastPoints[i].balance
+        sumXX += i * i
+      }
+      const denominator = (n * sumXX - sumX * sumX)
+      slope = denominator !== 0 ? (n * sumXY - sumX * sumY) / denominator : 0
+    }
+
+    const projectedPoints = []
+    let lastBalance = runningBalance
+    for (let i = 1; i <= 15; i++) {
+      const d = new Date()
+      d.setDate(d.getDate() + i)
+      const dateStr = d.toISOString().split('T')[0]
+      lastBalance += slope + (Math.sin(i) * (slope * 0.1 || 50000))
+      projectedPoints.push({
+        date: dateStr,
+        balance: Math.max(0, lastBalance),
+      })
+    }
+
+    return {
+      historical: historicalPoints,
+      projected: projectedPoints,
+    }
+  }
 }

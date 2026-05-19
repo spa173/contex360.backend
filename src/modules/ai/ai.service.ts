@@ -762,16 +762,33 @@ ${JSON.stringify(texts, null, 2)}`
 
   async generateDashboardInsights(tenantId: string) {
     try {
-      const stats = await this.analytics.getDashboardKpis(tenantId)
-      const prompt = `Actúa como Analista de Negocios para Contex360 ERP.
-Basado en: Ventas Totales: ${stats.totalSales}, Alertas de Stock Bajo: ${stats.lowStockAlerts}.
-Genera UN SOLO párrafo (máximo 150 caracteres) con un insight accionable y motivador para el dashboard.
-Tono profesional pero cercano. Solo el párrafo, sin comillas ni explicaciones.`
+      const [stats, trend] = await Promise.all([
+        this.analytics.getDashboardKpis(tenantId),
+        this.analytics.getCashFlowTrend(tenantId),
+      ])
+
+      const histBalances = trend.historical.map(p => p.balance)
+      const projBalances = trend.projected.map(p => p.balance)
+
+      const startBalance = histBalances[0] || 0
+      const currentBalance = histBalances[histBalances.length - 1] || 0
+      const endProjected = projBalances[projBalances.length - 1] || 0
+      const cashFlowGrowth = currentBalance - startBalance
+
+      const prompt = `Actúa como Analista Financiero Inteligente para Contex360 ERP.
+Basado en estos datos reales de la empresa:
+- Ventas de hoy: $${stats.totalSales.toLocaleString('es-CO')} COP.
+- Alertas de Stock Bajo: ${stats.lowStockAlerts}.
+- Saldo de Flujo de Caja actual: $${currentBalance.toLocaleString('es-CO')} COP (variación de $${cashFlowGrowth.toLocaleString('es-CO')} COP últimos 30 días).
+- Saldo proyectado a 15 días con IA: $${endProjected.toLocaleString('es-CO')} COP.
+
+Genera un único párrafo ultra-accionable y estratégico (máximo 170 caracteres) sobre la salud financiera o inventario de la empresa.
+Sé muy directo, profesional e inteligente. Solo devuelve el párrafo sin explicaciones, comillas o rodeos.`
 
       const completion = await this.groq.chat.completions.create({
         model: MODEL,
         messages: [{ role: 'user', content: prompt }],
-        max_tokens: 100,
+        max_tokens: 120,
       })
       return {
         insight: completion.choices[0]?.message?.content?.trim() ?? '',

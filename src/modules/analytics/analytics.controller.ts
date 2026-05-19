@@ -23,6 +23,12 @@ export class AnalyticsController {
     return this.analyticsService.getAlerts(tenantId);
   }
 
+  @Get('cash-flow-trend')
+  @Permissions('view_reports')
+  getCashFlowTrend(@TenantId() tenantId: string) {
+    return this.analyticsService.getCashFlowTrend(tenantId);
+  }
+
   @Get('sales-by-month')
   @Permissions('view_reports')
   getSalesByMonth(@TenantId() tenantId: string) {
