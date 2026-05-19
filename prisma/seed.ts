@@ -1,9 +1,23 @@
 import { Prisma, PrismaClient, ThirdPartyKind, UserStatus } from '@prisma/client'
 import { hashSync } from 'bcryptjs'
+import { randomBytes } from 'crypto'
 
 const prisma = new PrismaClient()
 
-const seedPassword = (email: string) => `${email}!A1`
+if (process.env.NODE_ENV === 'production') {
+  process.stderr.write('ERROR: seed cannot run in production.\n')
+  process.exit(1)
+}
+
+const generatedPasswords = new Map<string, string>()
+
+const seedPassword = (email: string): string => {
+  const existing = generatedPasswords.get(email)
+  if (existing) return existing
+  const pwd = randomBytes(12).toString('base64url') + 'A1!'
+  generatedPasswords.set(email, pwd)
+  return pwd
+}
 
 const defaultSecuritySettings = {
   passwordPolicy: {
@@ -214,16 +228,13 @@ async function main() {
     },
   })
 
-  process.stdout.write(
-    [
-      'Seed completed successfully.',
-      `Tenants: ${tenantA.name} (${tenantA.id}), ${tenantB.name} (${tenantB.id})`,
-      `Root: root@contex360.local`,
-      `Admins: admin.labs@contex360.local, admin.retail@contex360.local`,
-      `Operators: operator.labs@contex360.local, operator.retail@contex360.local`,
-      `Default password: [email]!A1`,
-    ].join('\n') + '\n',
-  )
+  const lines = [
+    'Seed completed successfully.',
+    `Tenants: ${tenantA.name} (${tenantA.id}), ${tenantB.name} (${tenantB.id})`,
+    'Generated passwords (save these — shown only once):',
+    ...Array.from(generatedPasswords.entries()).map(([email, pwd]) => `  ${email} => ${pwd}`),
+  ]
+  process.stdout.write(lines.join('\n') + '\n')
 }
 
 main()
