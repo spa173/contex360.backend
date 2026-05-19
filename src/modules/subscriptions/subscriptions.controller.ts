@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Headers, HttpCode, HttpStatus, UseGuards, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Headers, HttpCode, HttpStatus, UseGuards, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
 import { WompiService } from './wompi.service';
 import { AuthGuard } from '../auth/auth.guard';
@@ -14,6 +14,8 @@ interface WompiWebhookDto {
   data: any;
   signature?: { checksum?: string; properties?: string[] };
   timestamp?: number;
+  type?: string;
+  event?: string;
 }
 
 @Controller('subscriptions')
@@ -40,6 +42,9 @@ export class SubscriptionsController {
     if (!planType || !billing) {
       throw new BadRequestException('Missing planType or billing');
     }
+    if (!tenantId) {
+      throw new ForbiddenException('Tenant requerido para crear el checkout.');
+    }
     const link = await this.wompiService.createPaymentLink(planType, billing, tenantId);
     // Wompi returns "url" for redirection
     const redirectUrl = link?.url || link?.checkout_url || link?.redirect_url;
@@ -56,11 +61,23 @@ export class SubscriptionsController {
     }
 
     // Only handle transaction.updated events with APPROVED status
-    if (body?.data?.type !== 'transaction.updated' || body.data?.status !== 'APPROVED') {
+    const eventType = body?.type || body?.event || body?.data?.event || body?.data?.type
+    const transactionStatus =
+      body?.data?.transaction?.status ||
+      body?.data?.status ||
+      body?.data?.transaction?.final_status ||
+      body?.data?.transaction?.result?.status
+
+    if (eventType !== 'transaction.updated' || transactionStatus !== 'APPROVED') {
       return { received: true };
     }
 
-    const sku = body.data?.sku;
+    const sku =
+      body.data?.sku ||
+      body.data?.reference ||
+      body.data?.transaction?.sku ||
+      body.data?.transaction?.reference ||
+      body.data?.transaction?.metadata?.sku;
     if (!sku) return { received: true };
 
     const [planType, billing, tenantId] = sku.split('_');
@@ -73,24 +90,21 @@ export class SubscriptionsController {
       renewsAt.setDate(renewsAt.getDate() + 30);
     }
 
-    // Activate or update subscription in DB
-    await this.subscriptionsService['prisma'].subscription.upsert({
-      where: { tenantId },
-      create: {
-        tenantId,
-        planType: planType as any,
-        active: true,
-        trialEndsAt: null,
-        renewsAt,
-        invoicesThisMonth: 0,
-      },
-      update: {
-        active: true,
-        planType: planType as any,
-        trialEndsAt: null,
-        renewsAt,
-      },
-    });
+    await this.subscriptionsService.activateSubscription(
+      tenantId,
+      planType as any,
+      billing as any,
+      renewsAt,
+    );
     return { received: true };
+  }
+
+  @Post('cancel')
+  async cancel(@TenantId() tenantId: string) {
+    if (!tenantId) {
+      throw new ForbiddenException('Tenant requerido para cancelar la suscripcion.');
+    }
+    await this.subscriptionsService.cancelSubscription(tenantId);
+    return { ok: true, message: 'Suscripcion cancelada. Se mantendra activa hasta el final del ciclo actual.' };
   }
 }

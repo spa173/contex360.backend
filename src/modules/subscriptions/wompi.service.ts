@@ -16,7 +16,7 @@ export class WompiService {
   }
 
   private get webhookSecret() {
-    return process.env.WOMPI_WEBHOOK_SECRET || 'wsec_test_fake_webhook_secret';
+    return process.env.WOMPI_EVENTS_SECRET || process.env.WOMPI_WEBHOOK_SECRET || 'wsec_test_fake_webhook_secret';
   }
 
   async createPaymentLink(
@@ -31,6 +31,8 @@ export class WompiService {
 
     const price = billing === 'annual' ? plan.priceAnnual : plan.priceMonthly;
     const amountInCents = price * 100;
+    const frontendBase = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const redirectUrl = `${frontendBase.replace(/\/$/, '')}/pago-exitoso?planType=${planType}&billing=${billing}`;
 
     try {
       const response = await axios.post(
@@ -41,7 +43,7 @@ export class WompiService {
           single_use: true,
           amount_in_cents: amountInCents,
           currency: 'COP',
-          redirect_url: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard`,
+          redirect_url: redirectUrl,
           sku: `${planType}_${billing}_${tenantId}`
         },
         {
@@ -82,7 +84,7 @@ export class WompiService {
       }
 
       // Concatenate timestamp
-      concatenatedString += String(body.timestamp);
+      concatenatedString += String(body.timestamp || body?.data?.timestamp || body?.data?.transaction?.updated_at || '');
 
       // Concatenate secret
       concatenatedString += this.webhookSecret;
