@@ -11,6 +11,12 @@ import type { Response } from 'express'
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
+  @Get('dashboard')
+  @Permissions('view_reports')
+  getDashboardKpis(@TenantId() tenantId: string) {
+    return this.analyticsService.getDashboardKpis(tenantId);
+  }
+
   @Get('alerts')
   @Permissions('view_reports')
   getAlerts(@TenantId() tenantId: string) {
