@@ -842,10 +842,16 @@ export class DianService {
     }
 
     return {
-      ...tenant,
+      dianEnvironment: tenant.dianEnvironment,
+      dianSoftwareId: tenant.dianSoftwareId,
+      dianSoftwarePin: tenant.dianSoftwarePin,
+      dianNit: tenant.dianNit,
+      dianTestSetId: tenant.dianTestSetId,
+      invoiceResolution: tenant.invoiceResolution,
+      resolutionFrom: tenant.resolutionFrom,
+      resolutionTo: tenant.resolutionTo,
+      dianOperationCode: tenant.dianOperationCode,
       hasCertificate: Boolean(tenant.dianCertificate),
-      dianCertificate: undefined,
-      dianCertificatePassword: '',
     }
   }
 
