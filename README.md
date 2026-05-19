@@ -174,6 +174,36 @@ BANCOLOMBIA_TOKEN_ENCRYPTION_SECRET=<clave-larga-aleatoria>
 BANCOLOMBIA_STATEMENT_SOURCE_URL=<url-opcional-de-extractos>
 ```
 
+### Facturacion electronica DIAN
+
+```env
+DIAN_TEST_WSDL_URL=https://vpfe-hab.dian.gov.co/WcfDianCustomerServices.svc?singleWsdl
+DIAN_TEST_ENDPOINT_URL=https://vpfe-hab.dian.gov.co/WcfDianCustomerServices.svc
+DIAN_PROD_WSDL_URL=https://vpfe.dian.gov.co/WcfDianCustomerServices.svc?singleWsdl
+DIAN_PROD_ENDPOINT_URL=https://vpfe.dian.gov.co/WcfDianCustomerServices.svc
+```
+
+#### Como funciona
+
+1. La consola sube el certificado digital `.p12/.pfx` al backend.
+2. El backend genera el XML UBL 2.1, calcula el CUFE y firma el documento.
+3. En habilitacion usa `SendTestSetAsync`; en produccion usa `SendBillSync`.
+4. El `trackId`, CUFE y respuesta quedan en la `timeline` de la factura.
+
+#### Campos DIAN por tenant
+
+- `dianEnvironment`
+- `dianSoftwareId`
+- `dianSoftwarePin`
+- `dianNit`
+- `dianTestSetId`
+- `invoiceResolution`
+- `resolutionFrom`
+- `resolutionTo`
+- `dianOperationCode`
+- `dianCertificate` (base64 del `.p12/.pfx`)
+- `dianCertificatePassword`
+
 ### Productos — `/products`
 
 | Método | Ruta | Auth | Descripción |

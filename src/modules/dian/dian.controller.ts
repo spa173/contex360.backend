@@ -67,18 +67,28 @@ export class DianController {
       dianTestSetId?: string
       dianCertificate?: string
       dianCertificatePassword?: string
+      invoiceResolution?: string
+      resolutionFrom?: string
+      resolutionTo?: string
+      dianOperationCode?: string
     },
   ) {
     // Solo actualizar campos DIAN permitidos
     const updateData: any = {}
     const allowedFields = [
       'dianEnvironment', 'dianSoftwareId', 'dianSoftwarePin',
-      'dianNit', 'dianTestSetId', 'dianCertificate', 'dianCertificatePassword'
+      'dianNit', 'dianTestSetId', 'dianCertificate', 'dianCertificatePassword',
+      'invoiceResolution', 'resolutionFrom', 'resolutionTo', 'dianOperationCode'
     ]
     
     for (const field of allowedFields) {
       if (config[field as keyof typeof config] !== undefined) {
-        updateData[field] = config[field as keyof typeof config]
+        const value = config[field as keyof typeof config]
+        if (field === 'resolutionFrom' || field === 'resolutionTo') {
+          updateData[field] = value ? new Date(String(value)) : null
+        } else {
+          updateData[field] = value
+        }
       }
     }
 

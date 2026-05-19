@@ -47,12 +47,15 @@
     "googleapis": "^171.4.0",
     "groq-sdk": "^1.2.0",
     "jsonwebtoken": "^9.0.3",
+    "node-forge": "^1.4.0",
     "nodemailer": "^8.0.7",
     "otplib": "^13.4.0",
     "pdf-parse": "^2.4.5",
     "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2"
+    "rxjs": "^7.8.2",
+    "soap": "^1.9.2",
+    "xml-crypto": "^6.1.2"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.21",
@@ -62,6 +65,7 @@
     "@swc/helpers": "^0.5.21",
     "@types/express": "^5.0.6",
     "@types/node": "^25.6.0",
+    "@types/node-forge": "^1.3.14",
     "@types/pdf-parse": "^1.1.5",
     "@vitest/coverage-v8": "^4.1.5",
     "prisma": "^6.9.0",
