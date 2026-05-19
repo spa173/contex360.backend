@@ -611,6 +611,37 @@ model Transaction {
   @@index([tenantId, type])
 }
 
+enum SupportTicketStatus {
+  abierto
+  en_proceso
+  resuelto
+  cerrado
+}
+
+enum SupportTicketPriority {
+  baja
+  media
+  alta
+  critica
+}
+
+model SupportTicket {
+  id          String                @id @default(cuid())
+  tenantId    String?
+  userId      String?
+  userName    String
+  userEmail   String
+  subject     String
+  description String
+  priority    SupportTicketPriority @default(media)
+  status      SupportTicketStatus   @default(abierto)
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+
+  @@index([status, createdAt])
+  @@index([tenantId, createdAt])
+}
+
 model Subscription {
   id           String   @id @default(cuid())
   tenantId     String
