@@ -693,6 +693,7 @@ export class AuthService {
       planType,
       active,
       trialEndsAt,
+      invoicesThisMonth: subscription?.invoicesThisMonth ?? 0,
       limits,
     }
   }

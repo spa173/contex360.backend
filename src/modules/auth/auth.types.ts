@@ -127,6 +127,7 @@ export interface PublicSubscriptionSnapshot {
   planType: string
   active: boolean
   trialEndsAt: string | null
+  invoicesThisMonth: number
   limits: {
     name: string
     priceMonthly: number
