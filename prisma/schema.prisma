@@ -660,11 +660,12 @@ model SupportTicket {
 }
 
 model Subscription {
-  id           String   @id @default(cuid())
-  tenantId     String
-  planType     String
-  active       Boolean  @default(true)
-  trialEndsAt  DateTime?
+  id                String   @id @default(cuid())
+  tenantId          String
+  planType          String
+  active            Boolean  @default(true)
+  trialEndsAt       DateTime?
+  invoicesThisMonth Int      @default(0)
 
   tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
