@@ -14,6 +14,8 @@ const prismaMock = {
   },
 } as any
 
+const TEST_CERT_PASSWORD = 'test-cert-password-placeholder'
+
 describe('DianService', () => {
   it('detecta configuración incompleta', async () => {
     prismaMock.tenant.findUnique.mockResolvedValue({
@@ -83,7 +85,7 @@ describe('DianService', () => {
         dianSoftwareId: 'soft-123',
         dianSoftwarePin: '12345',
         dianCertificate: 'dGVzdA==',
-        dianCertificatePassword: 'secret',
+        dianCertificatePassword: TEST_CERT_PASSWORD,
         dianNit: '900123456',
         dianOperationCode: '10',
       },
