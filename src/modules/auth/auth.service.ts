@@ -727,7 +727,7 @@ export class AuthService {
         },
       })
 
-      await this.notificationService.sendPasswordResetEmail(user.email, user.name, token)
+      this.notificationService.sendPasswordResetEmail(user.email, user.name, token)
     }
 
     return {
