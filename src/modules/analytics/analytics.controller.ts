@@ -11,10 +11,10 @@ import type { Response } from 'express'
 export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
-  @Get('dashboard')
+  @Get('alerts')
   @Permissions('view_reports')
-  getDashboardKpis(@TenantId() tenantId: string) {
-    return this.analyticsService.getDashboardKpis(tenantId)
+  getAlerts(@TenantId() tenantId: string) {
+    return this.analyticsService.getAlerts(tenantId);
   }
 
   @Get('sales-by-month')

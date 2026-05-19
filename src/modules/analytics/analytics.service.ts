@@ -159,6 +159,29 @@ export class AnalyticsService {
       [operation]: field ? { [field]: true } : true,
     })
 
-    return result
+    return result;
+
+  /**
+   * Retrieve real‑time alerts for the tenant.
+   * Includes low‑stock product count and pending invoices.
+   */
+  async getAlerts(tenantId: string) {
+    const lowStockCount = await this.prisma.$queryRaw<{ count: bigint }[]>`
+      SELECT COUNT(*)::int AS count FROM "Product"
+      WHERE "tenantId" = ${tenantId}
+        AND "isInventoriable" = true
+        AND stock < "minStock"
+    `;
+    const pendingInvoices = await this.prisma.invoice.count({
+      where: {
+        tenantId,
+        NOT: { status: { in: ['paid', 'cancelled'] } },
+      },
+    });
+    return {
+      lowStockAlerts: Number(lowStockCount[0]?.count ?? 0),
+      pendingInvoices,
+    };
   }
-}
+  
+
