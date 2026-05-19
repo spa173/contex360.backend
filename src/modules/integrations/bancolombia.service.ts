@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config'
 import { JwtService } from '@nestjs/jwt'
 import { Prisma, TransactionCategory, TransactionType } from '@prisma/client'
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
+import { isIP } from 'node:net'
 import { PrismaService } from '../database/prisma.service'
 import { TreasuryService } from '../treasury/treasury.service'
 import {
@@ -100,6 +101,46 @@ function normalizeUrl(value: string) {
   return value.replace(/\/+$/, '')
 }
 
+function isProduction() {
+  return String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production'
+}
+
+function isPrivateIpAddress(hostname: string) {
+  const version = isIP(hostname)
+  if (!version) {
+    return false
+  }
+
+  const normalized = hostname.toLowerCase()
+  if (version === 6) {
+    return normalized === '::1' || normalized.startsWith('fe80:') || normalized.startsWith('fc') || normalized.startsWith('fd')
+  }
+
+  const [first = NaN, second = NaN] = normalized.split('.').map((part) => Number(part))
+  return first === 10
+    || first === 127
+    || (first === 169 && second === 254)
+    || (first === 192 && second === 168)
+    || (first === 172 && second >= 16 && second <= 31)
+}
+
+function assertSafeExternalUrl(url: string) {
+  const parsed = new URL(url)
+  const hostname = parsed.hostname.toLowerCase()
+
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error(`Protocolo no permitido para ${hostname}.`)
+  }
+
+  if (hostname === 'localhost' || hostname.endsWith('.localhost') || isPrivateIpAddress(hostname)) {
+    if (isProduction()) {
+      throw new Error(`Destino privado no permitido para ${hostname}.`)
+    }
+  }
+
+  return parsed.toString()
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
@@ -164,7 +205,7 @@ function decryptSecret(value: string | null | undefined, secret: string) {
 }
 
 async function requestJson<T>(url: string, init: RequestInit): Promise<T> {
-  const response = await fetch(url, init)
+  const response = await fetch(assertSafeExternalUrl(url), init)
   const text = await response.text()
   const body = text
     ? (() => {

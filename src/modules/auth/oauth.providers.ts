@@ -39,6 +39,12 @@ function normalizeUrl(value: string) {
   return value.replace(/\/+$/, '')
 }
 
+const TRUSTED_OAUTH_HOSTS = new Set([
+  'accounts.google.com',
+  'oauth2.googleapis.com',
+  'www.googleapis.com',
+])
+
 function isProduction() {
   return String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production'
 }
@@ -91,6 +97,15 @@ function resolveBackendBaseUrl() {
   return normalizeUrl(env('BACKEND_PUBLIC_URL', fallback))
 }
 
+function assertTrustedOAuthUrl(url: string) {
+  const parsed = new URL(url)
+  if (parsed.protocol !== 'https:' || !TRUSTED_OAUTH_HOSTS.has(parsed.hostname)) {
+    throw new Error(`OAuth endpoint no permitido: ${parsed.hostname}`)
+  }
+
+  return parsed.toString()
+}
+
 function resolveProviderRedirectUri(provider: OAuthProvider) {
   const explicit = env('GOOGLE_OAUTH_REDIRECT_URI')
 
@@ -121,7 +136,7 @@ function resolveProviderConfig(provider: OAuthProvider): OAuthProviderConfig {
 }
 
 async function requestJson<T>(url: string, init: RequestInit): Promise<T> {
-  const response = await fetch(url, init)
+  const response = await fetch(assertTrustedOAuthUrl(url), init)
   const text = await response.text()
   const body = text ? (() => {
     try {

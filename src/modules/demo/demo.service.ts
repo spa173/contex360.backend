@@ -2,6 +2,17 @@ import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 import { hash } from 'bcryptjs';
+import { randomBytes } from 'crypto';
+
+function safeLogMessage(value: unknown) {
+  const message = value instanceof Error
+    ? value.message || value.name
+    : typeof value === 'string'
+      ? value
+      : String(value ?? '');
+
+  return message.replace(/[\r\n]+/g, ' ').trim().slice(0, 240);
+}
 
 @Injectable()
 export class DemoService {
@@ -43,7 +54,7 @@ export class DemoService {
 
     if (systemOwner) {
       await this.notificationService.sendDemoRequestEmail(data, systemOwner.email).catch((err) => {
-        console.error('Failed to send Email notification:', err);
+        console.error('Failed to send Email notification:', safeLogMessage(err));
       });
     }
 
@@ -133,7 +144,6 @@ export class DemoService {
           email: demoRequest.correo,
           title: 'Administrador',
           passwordHash,
-          passwordSalt: 'bcryptjs',
         },
       });
 
@@ -187,7 +197,7 @@ export class DemoService {
       companyName: result.tenant.name,
       prefix: result.tenant.prefix,
     }).catch((err) => {
-      console.error('Failed to send Welcome Email:', err);
+      console.error('Failed to send Welcome Email:', safeLogMessage(err));
     });
 
     return {
@@ -202,10 +212,11 @@ export class DemoService {
   }
 
   private generateTempPassword(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%&*';
+    const bytes = randomBytes(12);
     let password = '';
-    for (let i = 0; i < 12; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    for (let i = 0; i < bytes.length; i++) {
+      password += chars.charAt(bytes[i] % chars.length);
     }
     return password;
   }

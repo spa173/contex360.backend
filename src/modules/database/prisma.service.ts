@@ -3,6 +3,10 @@ import { PrismaClient } from '@prisma/client'
 import { AsyncLocalStorage } from 'async_hooks'
 import { hashSync } from 'bcryptjs'
 
+function safeLogFragment(value: unknown) {
+  return String(value ?? '').replace(/[\r\n]+/g, ' ').trim().slice(0, 240)
+}
+
 export interface RlsUserContext {
   userId: string
   isSystemOwner: boolean
@@ -115,7 +119,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnAppli
             title: u.title,
             status: 'active',
             passwordHash,
-            passwordSalt: 'bcryptjs',
             isSystemOwner: u.isSystemOwner,
           },
           create: {
@@ -127,7 +130,6 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnAppli
             isDemoAccount: true,
             isSystemOwner: u.isSystemOwner,
             passwordHash,
-            passwordSalt: 'bcryptjs',
           },
         })
 
@@ -195,7 +197,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnAppli
 
       console.log('Automatic seed verification completed on module startup.')
     } catch (err) {
-      console.error('Error during automatic seed verification:', err)
+      console.error('Error during automatic seed verification:', safeLogFragment(err))
     }
   }
 

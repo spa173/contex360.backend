@@ -2,6 +2,16 @@ import { Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import * as nodemailer from 'nodemailer'
 
+function safeLogFragment(value: unknown) {
+  const message = value instanceof Error
+    ? value.message || value.name
+    : typeof value === 'string'
+      ? value
+      : String(value ?? '')
+
+  return message.replace(/[\r\n]+/g, ' ').trim().slice(0, 240)
+}
+
 export interface BreachAlertPayload {
   eventId: string
   severity: string
@@ -30,9 +40,6 @@ export class NotificationService {
           user: this.config.get<string>('SMTP_USER'),
           pass: this.config.get<string>('SMTP_PASS'),
         },
-        tls: {
-          rejectUnauthorized: false,
-        },
       })
     } else {
       this.logger.warn('SMTP no configurado. Las notificaciones de brecha solo se registraran en logs.')
@@ -44,7 +51,7 @@ export class NotificationService {
     const html = this.buildBreachAlertHtml(payload)
 
     if (!this.transporter) {
-      this.logger.warn(`BREACH ALERT (sin email): ${subject} | ${payload.description}`)
+      this.logger.warn(`BREACH ALERT (sin email): ${safeLogFragment(subject)} | ${safeLogFragment(payload.description)}`)
       return
     }
 
@@ -53,7 +60,7 @@ export class NotificationService {
     await Promise.all(
       payload.adminEmails.map((to) =>
         this.transporter!.sendMail({ from, to, subject, html }).catch((err) =>
-          this.logger.error(`Error enviando alerta a ${to}: ${err.message}`),
+          this.logger.error(`Error enviando alerta a ${safeLogFragment(to)}: ${safeLogFragment(err)}`),
         ),
       ),
     )
@@ -66,17 +73,17 @@ export class NotificationService {
     const html = this.buildDemoRequestHtml(data)
 
     if (!this.transporter) {
-      this.logger.warn(`NUEVA DEMO (sin email): ${subject} | ${data.nombre} (${data.correo})`)
+      this.logger.warn(`NUEVA DEMO (sin email): ${safeLogFragment(subject)} | ${safeLogFragment(data.nombre)} (${safeLogFragment(data.correo)})`)
       return
     }
 
     const from = this.config.get<string>('SMTP_FROM') ?? 'no-reply@contex360.com'
 
     await this.transporter.sendMail({ from, to: adminEmail, subject, html }).catch((err) =>
-      this.logger.error(`Error enviando notificación de demo a ${adminEmail}: ${err.message}`),
+      this.logger.error(`Error enviando notificación de demo a ${safeLogFragment(adminEmail)}: ${safeLogFragment(err)}`),
     )
 
-    this.logger.log(`Notificación de demo enviada a ${adminEmail}.`)
+    this.logger.log(`Notificación de demo enviada a ${safeLogFragment(adminEmail)}.`)
   }
 
   async sendWelcomeCredentialsEmail(data: {
@@ -90,14 +97,14 @@ export class NotificationService {
     const html = this.buildWelcomeEmailHtml(data)
 
     if (!this.transporter) {
-      this.logger.warn(`BIENVENIDA CLIENTE (sin email): ${subject} | ${data.email}`)
+      this.logger.warn(`BIENVENIDA CLIENTE (sin email): ${safeLogFragment(subject)} | ${safeLogFragment(data.email)}`)
       return
     }
 
     const from = this.config.get<string>('SMTP_FROM') ?? 'no-reply@contex360.com'
 
     await this.transporter.sendMail({ from, to: data.email, subject, html }).catch((err) =>
-      this.logger.error(`Error enviando credenciales a ${data.email}: ${err.message}`),
+      this.logger.error(`Error enviando credenciales a ${safeLogFragment(data.email)}: ${safeLogFragment(err)}`),
     )
 
     this.logger.log(`Credenciales de bienvenida enviadas a ${data.email}.`)
@@ -105,7 +112,7 @@ export class NotificationService {
 
   async sendGenericEmail(to: string, subject: string, body: string): Promise<void> {
     if (!this.transporter) {
-      this.logger.warn(`ENVIO EMAIL (sin transporter): ${to} | ${subject}`)
+      this.logger.warn(`ENVIO EMAIL (sin transporter): ${safeLogFragment(to)} | ${safeLogFragment(subject)}`)
       return
     }
 
@@ -128,10 +135,10 @@ export class NotificationService {
 
     try {
       await this.transporter.sendMail({ from, to, subject, html })
-      this.logger.log(`Email genérico enviado a ${to}.`)
+      this.logger.log(`Email genérico enviado a ${safeLogFragment(to)}.`)
     } catch (err: any) {
-      this.logger.error(`Error enviando email genérico a ${to}: ${err.message}`)
-      throw new Error(`No se pudo enviar el correo: ${err.message}`)
+      this.logger.error(`Error enviando email genérico a ${safeLogFragment(to)}: ${safeLogFragment(err)}`)
+      throw new Error(`No se pudo enviar el correo: ${safeLogFragment(err)}`)
     }
   }
 

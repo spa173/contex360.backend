@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common'
+import { randomInt } from 'node:crypto'
 import { ConfigService } from '@nestjs/config'
 import Groq from 'groq-sdk'
 import * as pdfParseModule from 'pdf-parse'
@@ -10,6 +11,70 @@ import { NotificationService } from '../notification/notification.service'
 import { PERSONAL_ASSISTANT_PROMPT } from './ai.prompts'
 
 const MODEL = 'llama-3.1-8b-instant'
+
+const SENSITIVE_OBJECT_KEYS = new Set([
+  'password',
+  'passwordHash',
+  'passwordSalt',
+  'secret',
+  'clientSecret',
+  'client_secret',
+  'accessToken',
+  'refreshToken',
+  'token',
+  'qrCode',
+  'otpauthUrl',
+])
+
+function safeLogFragment(value: unknown) {
+  const message = value instanceof Error
+    ? value.message || value.name
+    : typeof value === 'string'
+      ? value
+      : String(value ?? '')
+
+  return message.replace(/[\r\n]+/g, ' ').trim().slice(0, 240)
+}
+
+function sanitizeText(value: string) {
+  return String(value || '')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/\b(api[_-]?key|client[_-]?secret|refresh[_-]?token|access[_-]?token|password|secret)\b\s*[:=]\s*([^\s,;]+)/gi, '$1=[REDACTED]')
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, 'Bearer [REDACTED]')
+}
+
+function sanitizeModelPayload(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeModelPayload(item))
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString()
+  }
+
+  if (value && typeof value === 'object') {
+    const prototype = Object.getPrototypeOf(value)
+    if (prototype !== Object.prototype && prototype !== null) {
+      return value
+    }
+
+    return Object.entries(value as Record<string, unknown>).reduce<Record<string, unknown>>((acc, [key, entry]) => {
+      if (SENSITIVE_OBJECT_KEYS.has(key)) {
+        acc[key] = '[REDACTED]'
+        return acc
+      }
+
+      acc[key] = sanitizeModelPayload(entry)
+      return acc
+    }, {})
+  }
+
+  if (typeof value === 'string') {
+    return sanitizeText(value)
+  }
+
+  return value
+}
 
 // Herramientas en formato OpenAI (compatible con Groq)
 const TOOLS: Groq.Chat.ChatCompletionTool[] = [
@@ -329,7 +394,7 @@ export class AiService {
         })
         extractedVisionContent = visionRes.choices[0]?.message?.content || ''
       } catch (e: any) {
-        console.error('Groq Llama 4 Scout vision error:', e?.response?.data || e.message || e)
+        console.error('Groq Llama 4 Scout vision error:', safeLogFragment(e?.response?.data || e.message || e))
         extractedVisionContent = '[ERROR DE VISIÓN OCR]: No se pudo completar el análisis OCR de la imagen en los servidores de IA.'
       }
     } else if (attachment && attachment.startsWith('data:application/pdf')) {
@@ -341,7 +406,7 @@ export class AiService {
           extractedAttachmentContent = pdfData.text ? `[CONTENIDO TEXTUAL DEL DOCUMENTO PDF ADJUNTO]:\n"""\n${pdfData.text.slice(0, 4000)}\n"""` : ''
         }
       } catch (err) {
-        console.error('Error parsing PDF:', err)
+        console.error('Error parsing PDF:', safeLogFragment(err))
         extractedAttachmentContent = '[AVISO]: Documento PDF recibido e indexado correctamente en los registros.'
       }
     } else if (attachment && attachment.startsWith('data:text/')) {
@@ -407,7 +472,11 @@ export class AiService {
       }
     }
 
-    const systemPrompt = PERSONAL_ASSISTANT_PROMPT(tenantId, userName, isSystemOwner, formattedDate, formattedTime, liveData, attachmentSummary)
+    const sanitizedLiveData = sanitizeText(liveData)
+    const sanitizedAttachmentSummary = sanitizeText(attachmentSummary)
+    const sanitizedMessage = sanitizeText(message)
+
+    const systemPrompt = PERSONAL_ASSISTANT_PROMPT(tenantId, userName, isSystemOwner, formattedDate, formattedTime, sanitizedLiveData, sanitizedAttachmentSummary)
 
     // Convertir historial de formato Gemini ({role, parts}) a OpenAI ({role, content})
     const convertedHistory: Groq.Chat.ChatCompletionMessageParam[] = history
@@ -421,14 +490,14 @@ export class AiService {
         }
         return {
           role: (h.role === 'model' ? 'assistant' : h.role) as 'user' | 'assistant',
-          content,
+          content: sanitizeText(content),
         }
       })
 
     const messages: Groq.Chat.ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
       ...convertedHistory,
-      { role: 'user', content: message },
+      { role: 'user', content: sanitizedMessage },
     ]
 
     try {
@@ -452,6 +521,7 @@ export class AiService {
           isSystemOwner && args?.targetTenantId ? args.targetTenantId : tenantId
 
         const functionResult = await this.executeTool(toolCall.function.name, args, effectiveTenantId)
+        const sanitizedFunctionResult = sanitizeModelPayload(functionResult)
 
         const followUp = await this.groq.chat.completions.create({
           model: MODEL,
@@ -465,7 +535,7 @@ export class AiService {
             {
               role: 'tool',
               tool_call_id: toolCall.id,
-              content: JSON.stringify(functionResult),
+              content: JSON.stringify(sanitizedFunctionResult),
             },
           ],
           tools: TOOLS,
@@ -479,7 +549,7 @@ export class AiService {
 
       return this.formatResponse(responseText.trim(), extractedVisionContent || extractedAttachmentContent)
     } catch (error: any) {
-      console.error('AiService Error:', error.stack || error.message)
+      console.error('AiService Error:', safeLogFragment(error.stack || error.message || error))
       const errStr = error.message || ''
       if (errStr.includes('failed_generation')) {
         try {
@@ -496,7 +566,7 @@ export class AiService {
       }
       return {
         role: 'assistant',
-        content: `Error del Cerebro IA: ${error.message || 'Error desconocido'}. Por favor contacta a soporte.`,
+        content: `Error del Cerebro IA: ${safeLogFragment(error.message || 'Error desconocido')}. Por favor contacta a soporte.`,
       }
     }
   }
@@ -659,7 +729,7 @@ export class AiService {
 
       if (name === 'create_third_party') {
         const { name: tpName, nit, email, kind } = args
-        const cleanNit = nit || `${Math.floor(800000000 + Math.random() * 100000000)}-${Math.floor(Math.random() * 9)}`
+        const cleanNit = nit || `${randomInt(800000000, 900000000)}-${randomInt(0, 10)}`
         const cleanEmail = email || `${tpName.toLowerCase().replace(/[^a-z0-9]/g, '') || 'contacto'}@proveedor.com`
         const kindEnum = kind === 'client' ? ThirdPartyKind.client : ThirdPartyKind.provider
 
@@ -690,7 +760,7 @@ export class AiService {
       if (name === 'create_product') {
         const { name: prodName, price, sku, stock } = args
         const cleanPrice = Number(price) || 0
-        const cleanSku = sku || `SKU-${Math.floor(10000 + Math.random() * 90000)}`
+        const cleanSku = sku || `SKU-${randomInt(10000, 100000)}`
         const cleanStock = Number(stock) || 10
 
         const created = await this.prisma.product.upsert({
@@ -755,8 +825,8 @@ ${JSON.stringify(texts, null, 2)}`
       const jsonMatch = response.match(/\{[\s\S]*\}/)
       return JSON.parse(jsonMatch ? jsonMatch[0] : response)
     } catch (error: any) {
-      console.error('Translation Error:', error.message)
-      throw new Error(`Failed to translate: ${error.message}`)
+      console.error('Translation Error:', safeLogFragment(error.message || error))
+      throw new Error(`Failed to translate: ${safeLogFragment(error.message || error)}`)
     }
   }
 

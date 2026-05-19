@@ -135,7 +135,6 @@ async function main() {
         title: u.title,
         status: UserStatus.active,
         passwordHash,
-        passwordSalt: 'bcryptjs',
         isSystemOwner: u.isSystemOwner,
       },
       create: {
@@ -147,7 +146,6 @@ async function main() {
         isDemoAccount: true,
         isSystemOwner: u.isSystemOwner,
         passwordHash,
-        passwordSalt: 'bcryptjs',
       },
     })
 
@@ -239,7 +237,8 @@ async function main() {
 
 main()
   .catch(async (error) => {
-    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
+    const message = error instanceof Error ? error.message : String(error)
+    process.stderr.write(`${message.replace(/[\r\n]+/g, ' ')}\n`)
     process.exitCode = 1
   })
   .finally(async () => {

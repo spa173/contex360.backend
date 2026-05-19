@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common'
 import type { CookieOptions, Response } from 'express'
-import { AUTH_COOKIE_NAME, isOAuthProvider } from './auth.constants'
+import { AUTH_COOKIE_NAME, AUTH_REFRESH_COOKIE_NAME, isOAuthProvider } from './auth.constants'
 import { AuthGuard } from './auth.guard'
 import { AuthService } from './auth.service'
 import { TotpService } from './totp.service'
@@ -98,6 +98,24 @@ function clearAuthCookie(response: Response) {
   response.clearCookie(AUTH_COOKIE_NAME, resolveCookieOptions())
 }
 
+function setRefreshCookie(response: Response, token: string) {
+  response.cookie(AUTH_REFRESH_COOKIE_NAME, token, resolveCookieOptions())
+}
+
+function clearRefreshCookie(response: Response) {
+  response.clearCookie(AUTH_REFRESH_COOKIE_NAME, resolveCookieOptions())
+}
+
+function setAuthCookies(response: Response, accessToken: string, refreshToken: string) {
+  setAuthCookie(response, accessToken)
+  setRefreshCookie(response, refreshToken)
+}
+
+function clearAuthCookies(response: Response) {
+  clearAuthCookie(response)
+  clearRefreshCookie(response)
+}
+
 function redirectToFrontend(response: Response, redirectTo: string) {
   response.redirect(redirectTo || getDefaultFrontendCallbackUrl())
 }
@@ -117,7 +135,7 @@ export class AuthController {
   ) {
     const result = await this.authService.login(body, resolveRequestContext(request))
     if (response && 'accessToken' in result) {
-      setAuthCookie(response, result.accessToken)
+      setAuthCookies(response, result.accessToken, result.refreshToken)
     }
     return result
   }
@@ -128,9 +146,15 @@ export class AuthController {
     @Req() request: AuthenticatedRequest,
     @Res({ passthrough: true }) response?: Response,
   ) {
-    const result = await this.authService.refresh(body, resolveRequestContext(request))
+    const cookies = parseCookieHeader(request.headers.cookie)
+    const refreshToken = body.refreshToken || cookies[AUTH_REFRESH_COOKIE_NAME] || ''
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token requerido.')
+    }
+
+    const result = await this.authService.refresh({ refreshToken }, resolveRequestContext(request))
     if (response) {
-      setAuthCookie(response, result.accessToken)
+      setAuthCookies(response, result.accessToken, result.refreshToken)
     }
     return result
   }
@@ -184,7 +208,7 @@ export class AuthController {
       )
 
       if (response) {
-        setAuthCookie(response, result.auth.accessToken)
+        setAuthCookies(response, result.auth.accessToken, result.auth.refreshToken)
         redirectToFrontend(response, result.redirectTo)
       }
     } catch (error) {
@@ -255,7 +279,7 @@ export class AuthController {
     }
 
     if (response) {
-      clearAuthCookie(response)
+      clearAuthCookies(response)
     }
 
     return {

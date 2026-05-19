@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common'
+import { randomInt } from 'node:crypto'
 import { PrismaService } from '../database/prisma.service'
 
 @Injectable()
@@ -327,7 +328,7 @@ export class AnalyticsService {
       },
     ];
 
-    const selected = mockInvoices[Math.floor(Math.random() * mockInvoices.length)];
+    const selected = mockInvoices[randomInt(mockInvoices.length)];
 
     return this.prisma.ocrRun.create({
       data: {
@@ -374,7 +375,7 @@ export class AnalyticsService {
       });
     }
 
-    const nextNumber = 1000 + Math.floor(Math.random() * 9000);
+    const nextNumber = 1000 + randomInt(9000);
 
     const purchase = await this.prisma.purchase.create({
       data: {

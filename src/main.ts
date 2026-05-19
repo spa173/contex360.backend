@@ -76,7 +76,7 @@ export async function bootstrap() {
     const document = SwaggerModule.createDocument(app, swaggerConfig)
     SwaggerModule.setup(swaggerPath, app, document)
   } catch (error: any) {
-    logger.warn(`Failed to generate Swagger documentation: ${error.message}`)
+    logger.warn(`Failed to generate Swagger documentation: ${String(error.message || error).replace(/[\r\n]+/g, ' ')}`)
   }
 
   // Solo hacemos listen si NO estamos en entorno de Vite (donde Vite maneja el servidor)
@@ -94,8 +94,7 @@ export const viteNodeApp = process.env.VITE ? bootstrap() : null;
 if (!process.env.VITE) {
   bootstrap().catch((error: unknown) => {
     const message = error instanceof Error ? error.stack ?? error.message : String(error)
-    logger.error('Failed to start backend', message)
+    logger.error('Failed to start backend', message.replace(/[\r\n]+/g, ' '))
     process.exit(1)
   })
 }
-
