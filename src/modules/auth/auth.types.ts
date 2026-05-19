@@ -102,6 +102,7 @@ export interface PublicUserSnapshot {
   lastLoginAt: string | null
   isSystemOwner: boolean
   isDemoAccount: boolean
+  twoFactorEnabled?: boolean
 }
 
 export interface PublicSessionSnapshot {

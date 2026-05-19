@@ -529,7 +529,7 @@ export class AuthService {
     return 'OS'
   }
 
-  private mapUserSnapshot(user: User): PublicUserSnapshot {
+  private mapUserSnapshot(user: User & { securityProfile?: any }): PublicUserSnapshot {
     return {
       id: user.id,
       name: user.name,
@@ -539,6 +539,7 @@ export class AuthService {
       lastLoginAt: toIso(user.lastLoginAt),
       isSystemOwner: user.isSystemOwner,
       isDemoAccount: user.isDemoAccount,
+      twoFactorEnabled: user.securityProfile?.twoFactorEnabled ?? false,
     }
   }
 
@@ -600,6 +601,7 @@ export class AuthService {
         name: dto.name,
         title: dto.title,
       },
+      include: { securityProfile: true },
     })
     return this.mapUserSnapshot(user)
   }
