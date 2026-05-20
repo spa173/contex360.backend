@@ -9,7 +9,7 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-RUN npm ci
+RUN npm install
 
 COPY . .
 
@@ -28,7 +28,7 @@ COPY package*.json ./
 COPY prisma ./prisma/
 
 # Only install production dependencies
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
 # Copy generated Prisma client from builder stage
 COPY --from=builder /usr/src/app/node_modules/.prisma ./node_modules/.prisma
