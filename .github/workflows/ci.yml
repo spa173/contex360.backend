@@ -4,9 +4,12 @@ on:
   push:
     branches:
       - main
-      - master
+      - staging
       - 'codex/**'
   pull_request:
+    branches:
+      - main
+      - staging
 
 concurrency:
   group: backend-ci-${{ github.ref }}
@@ -29,8 +32,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Static Analysis (Type Checking)
+        run: npx tsc --noEmit
+
       - name: Build
         run: npm run build
 
-      - name: Test
+      - name: Run Unit Tests
         run: npm test
+
