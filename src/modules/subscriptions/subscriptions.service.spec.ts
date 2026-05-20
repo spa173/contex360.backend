@@ -14,7 +14,7 @@ describe('SubscriptionsService', () => {
     const service = new SubscriptionsService(prismaMock);
     const result = await service.getCurrentSubscription('tenant-id');
 
-    expect(result.plan).toBe('starter');
+    expect(result.planType).toBe('starter');
     expect(result.limits).toEqual(PLANS.starter);
   });
 
@@ -29,7 +29,7 @@ describe('SubscriptionsService', () => {
     const service = new SubscriptionsService(prismaMock);
     const result = await service.getCurrentSubscription('tenant-id');
 
-    expect(result.plan).toBe('pyme');
+    expect(result.planType).toBe('pyme');
     expect(result.limits).toEqual(PLANS.pyme);
     expect(result.trialDaysRemaining).toBe(10);
     expect(result.invoicesThisMonth).toBe(10);
