@@ -17,6 +17,7 @@ const prismaMock = {
 
 const jwtServiceMock = {} as any;
 const totpServiceMock = {} as any;
+const notificationServiceMock = {} as any;
 
 describe('AuthService.me', () => {
   it('should return subscription details in bootstrap payload', async () => {
@@ -79,7 +80,7 @@ describe('AuthService.me', () => {
       invoicesThisMonth: 5,
     });
 
-    const service = new AuthService(prismaMock, jwtServiceMock, totpServiceMock);
+    const service = new AuthService(prismaMock, jwtServiceMock, totpServiceMock, notificationServiceMock);
     const result = await service.me(authUser);
 
     expect(result.ok).toBe(true);
