@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common'
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common'
 import { APP_INTERCEPTOR } from '@nestjs/core'
 import { ConfigModule } from '@nestjs/config'
 import { ThrottlerModule } from '@nestjs/throttler'
@@ -26,6 +26,8 @@ import { QuotesModule } from './modules/quotes/quotes.module'
 import { SupportModule } from './modules/support/support.module'
 import { IntegrationsModule } from './modules/integrations/integrations.module'
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module'
+import { HelpCenterModule } from './modules/help-center/help-center.module'
+import { CsrfMiddleware } from './common/middleware/csrf.middleware'
 
 @Module({
   imports: [
@@ -59,6 +61,7 @@ import { SubscriptionsModule } from './modules/subscriptions/subscriptions.modul
     SupportModule,
     IntegrationsModule,
     SubscriptionsModule,
+    HelpCenterModule,
   ],
   controllers: [AppController],
   providers: [
@@ -68,4 +71,8 @@ import { SubscriptionsModule } from './modules/subscriptions/subscriptions.modul
     // { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(CsrfMiddleware).forRoutes('*')
+  }
+}

@@ -1,3 +1,13 @@
+---
+title: Contex360 Backend
+emoji: 🚀
+colorFrom: indigo
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Contex360 — Backend API
 
 > ERP colombiano multi-tenant. Backend construido con **NestJS + Prisma + PostgreSQL (Neon)**.

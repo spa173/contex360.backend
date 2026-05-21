@@ -466,7 +466,19 @@ export class BancolombiaService {
     return secret
   }
 
-  private getOAuthConfig() {
+  private getOAuthConfig(environment: BancolombiaEnvironment = 'production') {
+    if (environment === 'sandbox') {
+      const backendUrl = this.getBackendUrl()
+      return {
+        authorizationUrl: `${backendUrl}/integrations/bancolombia/sandbox-authorize`,
+        tokenUrl: `${backendUrl}/integrations/bancolombia/sandbox-token`,
+        clientId: this.config.get<string>('BANCOLOMBIA_CLIENT_ID') || 'mock-client-id',
+        clientSecret: this.config.get<string>('BANCOLOMBIA_CLIENT_SECRET') || 'mock-client-secret',
+        scope: this.config.get<string>('BANCOLOMBIA_SCOPE') || 'read:statements',
+        redirectUri: `${backendUrl}/integrations/bancolombia/callback`,
+      }
+    }
+
     const authorizationUrl = normalizeText(this.config.get<string>('BANCOLOMBIA_AUTHORIZATION_URL'))
     const tokenUrl = normalizeText(this.config.get<string>('BANCOLOMBIA_TOKEN_URL'))
     const clientId = normalizeText(this.config.get<string>('BANCOLOMBIA_CLIENT_ID'))
@@ -641,7 +653,7 @@ export class BancolombiaService {
       throw new BadRequestException('La conexion OAuth aplica solo para Open Finance.')
     }
 
-    const oauth = this.getOAuthConfig()
+    const oauth = this.getOAuthConfig(metadata.environment)
     const state = this.buildState({
       tenantId,
       userId,
@@ -661,8 +673,8 @@ export class BancolombiaService {
     return { ok: true, url: url.toString() }
   }
 
-  private async exchangeCodeForToken(code: string) {
-    const oauth = this.getOAuthConfig()
+  private async exchangeCodeForToken(code: string, environment: BancolombiaEnvironment = 'production') {
+    const oauth = this.getOAuthConfig(environment)
     const basic = Buffer.from(`${oauth.clientId}:${oauth.clientSecret}`).toString('base64')
     const body = new URLSearchParams({
       grant_type: 'authorization_code',
@@ -696,13 +708,14 @@ export class BancolombiaService {
       throw new BadRequestException('No se recibio el codigo de autorizacion Bancolombia.')
     }
 
-    const tokenSet = await this.exchangeCodeForToken(code)
+    const current = await this.getCredential(payload.tenantId)
+    const currentMetadata = this.normalizeMetadata(current?.metadata)
+
+    const tokenSet = await this.exchangeCodeForToken(code, currentMetadata.environment)
     if (!tokenSet.access_token && !tokenSet.refresh_token) {
       throw new BadRequestException('Bancolombia no retorno tokens validos.')
     }
 
-    const current = await this.getCredential(payload.tenantId)
-    const currentMetadata = this.normalizeMetadata(current?.metadata)
     const nextMetadata: BancolombiaStoredMetadata = {
       ...currentMetadata,
       integrationMode: payload.integrationMode,

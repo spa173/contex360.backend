@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config'
 import { NestFactory } from '@nestjs/core'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { AppModule } from './app.module'
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter'
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor'
 
 import { json, urlencoded } from 'express'
@@ -29,14 +30,14 @@ export async function bootstrap() {
   appInstance = app
   const configService = app.get(ConfigService)
 
-  // Railway y Render terminan TLS en el proxy y reenvían la IP real
+  // Bancolombia // Hugging Face termina TLS en el proxy y reenvía la IP real
   // en X-Forwarded-For. Sin esto: rate limiting por IP del proxy,
   // sesiones con IP incorrecta y cookies secure rechazadas en HTTP interno.
   const expressApp = app.getHttpAdapter().getInstance()
   expressApp.set('trust proxy', 1)
 
   app.use(json({ limit: '50mb' }))
-  app.use(urlencoded({ extended: true, limit: '50mb' }))
+  app.use(urlencoded({ extended: true, limit: '500mb' }))
   
   const corsOrigin = configService.get<string>('CORS_ORIGIN')
   const allowedOrigins = corsOrigin ? corsOrigin.split(',') : true
@@ -45,7 +46,7 @@ export async function bootstrap() {
     origin: allowedOrigins,
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    allowedHeaders: 'Content-Type,Accept,Authorization,X-Requested-With,x-tenant-id',
+    allowedHeaders: 'Content-Type,Accept,Authorization,X-Requested-With,x-tenant-id,X-CSRF-Token',
     exposedHeaders: 'Authorization',
     preflightContinue: false,
     optionsSuccessStatus: 204,
@@ -63,6 +64,7 @@ export async function bootstrap() {
     }),
   )
 
+  app.useGlobalFilters(new AllExceptionsFilter())
   app.useGlobalInterceptors(new LoggingInterceptor())
 
   const swaggerConfig = new DocumentBuilder()

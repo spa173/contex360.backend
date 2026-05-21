@@ -151,7 +151,7 @@ export class NotificationService {
     companyName: string;
     prefix: string;
   }): string {
-    const loginUrl = 'https://contex360fronted.vercel.app'
+    const loginUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
 
     return `
 <!DOCTYPE html>
@@ -282,7 +282,7 @@ export class NotificationService {
   }
 
   private buildPasswordResetHtml(data: { email: string; name: string; token: string }): string {
-    const resetUrl = `https://contex360fronted.vercel.app/reset-password?token=${data.token}`
+    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/reset-password?token=${data.token}`
 
     return `
 <!DOCTYPE html>
