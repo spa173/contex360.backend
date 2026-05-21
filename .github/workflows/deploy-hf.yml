@@ -1,37 +1,33 @@
 name: Deploy backend to Hugging Face
+
 on:
   push:
     branches:
       - staging
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20'
-      - name: Install dependencies
-        run: npm ci
-      - name: Build backend
-        run: npm run build
-      - name: Login to Hugging Face
-        env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          lfs: true
+
+      - name: Configure git identity
         run: |
-          pip install --quiet huggingface_hub
-          echo "$HF_TOKEN" | huggingface-cli login --token
-      - name: Deploy to Hugging Face Space
+          git config user.email "ci@contex360.com"
+          git config user.name "Contex360 CI"
+
+      - name: Push to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_USERNAME: ${{ secrets.HF_USERNAME }}
-          HF_SPACE_REPO: ${{ secrets.HF_SPACE_REPO }}
+          HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
         run: |
-          # Add remote for Hugging Face Space (if not already present)
-          git remote add hf https://github.com/${HF_USERNAME}/${HF_SPACE_REPO}.git || true
-          # Push the staging branch to the main branch of the Space repository
-          git push hf staging:main --force
+          # Agregar remote apuntando al Space de Hugging Face con autenticación
+          git remote add hf https://${{ env.HF_USERNAME }}:${{ env.HF_TOKEN }}@huggingface.co/spaces/${{ env.HF_USERNAME }}/${{ env.HF_SPACE_NAME }}
+
+          # Forzar push de la rama staging al main del Space (HF dispara el build Docker)
+          git push hf HEAD:main --force

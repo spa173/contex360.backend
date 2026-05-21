@@ -46,7 +46,7 @@ export async function bootstrap() {
     origin: allowedOrigins,
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    allowedHeaders: 'Content-Type,Accept,Authorization,X-Requested-With,x-tenant-id',
+    allowedHeaders: 'Content-Type,Accept,Authorization,X-Requested-With,x-tenant-id,X-CSRF-Token',
     exposedHeaders: 'Authorization',
     preflightContinue: false,
     optionsSuccessStatus: 204,
