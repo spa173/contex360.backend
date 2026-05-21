@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import { BadRequestException, Body, Controller, Delete, Get, Post, Query, Req, Res, UseGuards } from '@nestjs/common'
 import { Response } from 'express'
 import { AuthGuard } from '../auth/auth.guard'
@@ -294,8 +295,8 @@ export class BancolombiaController {
   @Public()
   async sandboxToken() {
     return {
-      access_token: 'mock-access-token-' + Math.random().toString(36).substring(7),
-      refresh_token: 'mock-refresh-token-' + Math.random().toString(36).substring(7),
+      access_token: 'mock-access-token-' + randomBytes(4).toString('hex'),
+      refresh_token: 'mock-refresh-token-' + randomBytes(4).toString('hex'),
       expires_in: 3600,
       scope: 'read:statements',
     }
