@@ -64,11 +64,6 @@ export async function bootstrap() {
     }),
   )
 
-  const fallback = isProduction()
-    ? env('BACKEND_PUBLIC_URL') || ''
-    : `http://localhost:${env('PORT', '3001')}`
-
-  return normalizeUrl(env('BACKEND_PUBLIC_URL', fallback))
   app.useGlobalFilters(new AllExceptionsFilter())
   app.useGlobalInterceptors(new LoggingInterceptor())
 

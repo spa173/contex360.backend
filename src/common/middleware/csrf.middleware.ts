@@ -1,6 +1,6 @@
 import { Injectable, NestMiddleware, ForbiddenException } from '@nestjs/common'
 import type { Request, Response, NextFunction } from 'express'
-import { CSRF_COOKIE_NAME, AUTH_COOKIE_NAME } from '../auth/auth.constants'
+import { CSRF_COOKIE_NAME, AUTH_COOKIE_NAME } from '../../modules/auth/auth.constants'
 import * as crypto from 'crypto'
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])

@@ -1,9 +1,9 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { HelpCenterService } from './help-center.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AuthGuard } from '../auth/auth.guard';
 
 @Controller('help-center')
-@UseGuards(JwtAuthGuard)
+@UseGuards(AuthGuard)
 export class HelpCenterController {
   constructor(private readonly helpCenterService: HelpCenterService) {}
 
