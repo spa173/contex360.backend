@@ -673,3 +673,34 @@ model Subscription {
   @@unique([tenantId])
 }
 
+model HelpCategory {
+  id        String        @id
+  label     String
+  icon      String
+  articles  HelpArticle[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+model HelpArticle {
+  id         Int          @id @default(autoincrement())
+  categoryId String
+  title      String
+  summary    String
+  readTime   String
+  icon       String
+  steps      String[]
+  category   HelpCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@index([categoryId])
+}
+
+model HelpFaq {
+  id        Int      @id @default(autoincrement())
+  question  String
+  answer    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

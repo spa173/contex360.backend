@@ -9,7 +9,7 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-RUN npm ci
+RUN npm install
 
 COPY . .
 
@@ -28,16 +28,16 @@ COPY package*.json ./
 COPY prisma ./prisma/
 
 # Only install production dependencies
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
 # Copy generated Prisma client from builder stage
 COPY --from=builder /usr/src/app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /usr/src/app/node_modules/@prisma/client ./node_modules/@prisma/client
 COPY --from=builder /usr/src/app/dist ./dist
 
-EXPOSE 8080
+EXPOSE 7860
 
-ENV PORT=8080
+ENV PORT=7860
 ENV NODE_ENV=production
 
 CMD ["node", "--max-old-space-size=384", "dist/main.js"]
