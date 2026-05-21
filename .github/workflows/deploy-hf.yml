@@ -26,6 +26,12 @@ jobs:
           HF_USERNAME: ${{ secrets.HF_USERNAME }}
           HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
         run: |
+          # Saltar si las secrets no están configuradas
+          if [ -z "$HF_TOKEN" ] || [ -z "$HF_USERNAME" ] || [ -z "$HF_SPACE_NAME" ]; then
+            echo "Hugging Face secrets not configured. Skipping deployment."
+            exit 0
+          fi
+
           # Agregar remote apuntando al Space de Hugging Face con autenticación
           git remote add hf https://${{ env.HF_USERNAME }}:${{ env.HF_TOKEN }}@huggingface.co/spaces/${{ env.HF_USERNAME }}/${{ env.HF_SPACE_NAME }}
 
