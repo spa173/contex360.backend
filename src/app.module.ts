@@ -26,6 +26,7 @@ import { QuotesModule } from './modules/quotes/quotes.module'
 import { SupportModule } from './modules/support/support.module'
 import { IntegrationsModule } from './modules/integrations/integrations.module'
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module'
+import { HelpCenterModule } from './modules/help-center/help-center.module'
 import { CsrfMiddleware } from './common/middleware/csrf.middleware'
 
 @Module({
@@ -60,6 +61,7 @@ import { CsrfMiddleware } from './common/middleware/csrf.middleware'
     SupportModule,
     IntegrationsModule,
     SubscriptionsModule,
+    HelpCenterModule,
   ],
   controllers: [AppController],
   providers: [
