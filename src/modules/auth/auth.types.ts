@@ -17,6 +17,9 @@ export class LoginRequestDto {
   @Transform(({ value }) => String(value || '').trim())
   @IsString()
   totpCode?: string
+
+  @IsOptional()
+  rememberMe?: boolean
 }
 
 export interface TotpRequiredResponse {
@@ -176,10 +179,13 @@ export interface AuthResponseSnapshot {
 }
 
 export class RefreshTokenDto {
+  @IsOptional()
   @Transform(({ value }) => String(value || '').trim())
-  @IsString({ message: 'El refresh token es requerido.' })
-  @MinLength(1, { message: 'El refresh token es requerido.' })
-  refreshToken!: string
+  @IsString()
+  refreshToken?: string
+
+  @IsOptional()
+  rememberMe?: boolean
 }
 
 export interface OAuthStatePayload {
