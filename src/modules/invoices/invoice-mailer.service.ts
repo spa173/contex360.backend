@@ -40,7 +40,7 @@ export class InvoiceMailerService {
         doc.text(`Total: $${payload.total.toLocaleString('es-CO')}`);
         doc.text(`CUFE: ${payload.cufe}`);
         doc.moveDown();
-        doc.text(`Esta es una representación gráfica básica de la factura electrónica.`, { align: 'center', color: 'grey' });
+        doc.fillColor('grey').text(`Esta es una representación gráfica básica de la factura electrónica.`, { align: 'center' });
 
         doc.end();
       } catch (err) {
@@ -84,13 +84,13 @@ export class InvoiceMailerService {
 
     try {
       await transporter.sendMail({
-        from: \`"\${tenant.name}" <\${tenant.smtpFromEmail}>\`,
+        from: `"${tenant.name}" <${tenant.smtpFromEmail}>`,
         to: payload.clientEmail,
-        subject: \`Factura Electrónica \${payload.invoiceNumber} - \${tenant.name}\`,
+        subject: `Factura Electrónica ${payload.invoiceNumber} - ${tenant.name}`,
         html,
         attachments: [
           {
-            filename: \`Factura_\${payload.invoiceNumber}.pdf\`,
+            filename: `Factura_${payload.invoiceNumber}.pdf`,
             content: pdfBuffer,
             contentType: 'application/pdf',
           },
@@ -101,9 +101,9 @@ export class InvoiceMailerService {
           },
         ],
       });
-      this.logger.log(\`Factura \${payload.invoiceNumber} enviada exitosamente a \${payload.clientEmail} usando SMTP de \${tenant.name}\`);
+      this.logger.log(`Factura ${payload.invoiceNumber} enviada exitosamente a ${payload.clientEmail} usando SMTP de ${tenant.name}`);
     } catch (err) {
-      this.logger.error(\`Error enviando factura por SMTP para tenant \${tenant.name}:\`, err);
+      this.logger.error(`Error enviando factura por SMTP para tenant ${tenant.name}:`, err);
     }
   }
 }
