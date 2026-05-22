@@ -393,6 +393,8 @@ model LedgerEntry {
   referenceId   String?
   description   String
   amount        Decimal     @db.Decimal(14, 2)
+  reconciled    Boolean     @default(false)
+  reconciledAt  DateTime?
   entryAt       DateTime    @default(now())
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
@@ -401,6 +403,7 @@ model LedgerEntry {
   lines         LedgerLine[]
 
   @@index([tenantId, entryAt])
+  @@index([tenantId, reconciled])
 }
 
 model LedgerLine {
