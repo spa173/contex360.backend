@@ -35,7 +35,8 @@ describe('DianService', () => {
       dianOperationCode: '10',
     })
 
-    const service = new DianService(prismaMock)
+    const mailerMock = { sendInvoice: vi.fn() } as any
+    const service = new DianService(prismaMock, mailerMock)
     const result = await service.validateConfig('tenant-1')
 
     expect(result.valid).toBe(false)
@@ -44,7 +45,8 @@ describe('DianService', () => {
   })
 
   it('genera XML UBL con CUFE y numero de factura', () => {
-    const service = new DianService(prismaMock)
+    const mailerMock = { sendInvoice: vi.fn() } as any
+    const service = new DianService(prismaMock, mailerMock)
     const xml = service.generateUblXml(
       {
         invoiceId: 'inv-1',
