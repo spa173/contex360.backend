@@ -314,6 +314,7 @@ export class AdminService {
     smtpUser?: string
     smtpPassword?: string
     smtpFromEmail?: string
+    activeIntegrations?: string[]
   }) {
     const tenant = await this.prisma.tenant.findUnique({ where: { id } })
     if (!tenant) throw new NotFoundException('Empresa no encontrada.')

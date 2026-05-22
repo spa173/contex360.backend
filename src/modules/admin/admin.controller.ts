@@ -75,7 +75,7 @@ export class AdminController {
   @Patch('tenants/:id')
   updateTenant(
     @Param('id') id: string,
-    @Body() body: { name?: string; sector?: string; city?: string; costMethod?: string; allowNegativeStock?: boolean; smtpHost?: string; smtpPort?: number; smtpUser?: string; smtpPassword?: string; smtpFromEmail?: string },
+    @Body() body: { name?: string; sector?: string; city?: string; costMethod?: string; allowNegativeStock?: boolean; smtpHost?: string; smtpPort?: number; smtpUser?: string; smtpPassword?: string; smtpFromEmail?: string; activeIntegrations?: string[] },
   ) {
     return this.adminService.updateTenant(id, body)
   }
