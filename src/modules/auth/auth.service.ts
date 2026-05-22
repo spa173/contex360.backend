@@ -180,7 +180,7 @@ export class AuthService {
   }
 
   async refresh(dto: RefreshTokenDto, context: AuthRequestContext): Promise<AuthResponseSnapshot> {
-    const tokenHash = createHash('sha256').update(dto.refreshToken).digest('hex')
+    const tokenHash = createHash('sha256').update(dto.refreshToken || '').digest('hex')
 
     const stored = await this.prisma.refreshToken.findUnique({
       where: { tokenHash },
