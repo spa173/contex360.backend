@@ -4,11 +4,12 @@ import { InvoicesController } from './invoices.controller'
 import { PrismaModule } from '../database/prisma.module'
 import { AuthModule } from '../auth/auth.module'
 import { LedgerModule } from '../ledger/ledger.module'
+import { InvoiceMailerService } from './invoice-mailer.service'
 
 @Module({
   imports: [PrismaModule, AuthModule, LedgerModule],
   controllers: [InvoicesController],
-  providers: [InvoicesService],
-  exports: [InvoicesService],
+  providers: [InvoicesService, InvoiceMailerService],
+  exports: [InvoicesService, InvoiceMailerService],
 })
 export class InvoicesModule {}

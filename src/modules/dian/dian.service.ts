@@ -5,6 +5,7 @@ import * as forge from 'node-forge'
 import { SignedXml } from 'xml-crypto'
 import { createHash, randomUUID } from 'crypto'
 import { PrismaService } from '../database/prisma.service'
+import { InvoiceMailerService } from '../invoices/invoice-mailer.service'
 
 export interface DianInvoicePayload {
   invoiceId: string
@@ -403,7 +404,10 @@ function buildQrCodeUrl(cufe: string) {
 export class DianService {
   private readonly logger = new Logger(DianService.name)
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly invoiceMailer: InvoiceMailerService
+  ) {}
 
   async sendInvoice(invoice: DianInvoicePayload): Promise<DianResponse> {
     const tenant = await this.prisma.tenant.findUnique({
@@ -521,6 +525,20 @@ export class DianService {
           status: accepted ? InvoiceStatus.sent : InvoiceStatus.emitted,
         },
       })
+
+      if (accepted) {
+        this.invoiceMailer.sendInvoice({
+          tenantId: invoice.tenantId,
+          invoiceId: invoice.invoiceId,
+          clientEmail: invoice.client.email,
+          clientName: invoice.client.name,
+          invoiceNumber: invoice.number,
+          cufe,
+          total: invoice.total,
+          xmlFileName,
+          xmlBase64: contentFile,
+        }).catch(err => this.logger.error('Error in background invoice mailing', err));
+      }
 
       return {
         success: accepted,

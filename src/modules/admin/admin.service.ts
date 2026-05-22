@@ -309,6 +309,11 @@ export class AdminService {
     city?: string
     costMethod?: string
     allowNegativeStock?: boolean
+    smtpHost?: string
+    smtpPort?: number
+    smtpUser?: string
+    smtpPassword?: string
+    smtpFromEmail?: string
   }) {
     const tenant = await this.prisma.tenant.findUnique({ where: { id } })
     if (!tenant) throw new NotFoundException('Empresa no encontrada.')

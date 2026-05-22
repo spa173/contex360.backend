@@ -136,6 +136,11 @@ model Tenant {
   dianCertificatePassword String?
   dianNit           String?               // NIT para envío DIAN
   dianOperationCode String                 @default("10") // 10: factura ordinaria
+  smtpHost          String?
+  smtpPort          Int?
+  smtpUser          String?
+  smtpPassword      String?
+  smtpFromEmail     String?
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
   memberships       Membership[]
