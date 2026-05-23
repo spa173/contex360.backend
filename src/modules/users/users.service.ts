@@ -6,6 +6,7 @@ import * as bcrypt from 'bcryptjs'
 export interface CreateUserDto {
   name: string
   email: string
+  password?: string
   title?: string
   tenantId?: string
   role?: string
@@ -32,7 +33,7 @@ export class UsersService {
       throw new BadRequestException('El correo ya está registrado.')
     }
 
-    const tempPassword = this.generateTemporaryPassword()
+    const tempPassword = dto.password || this.generateTemporaryPassword()
     const { hash, salt } = await this.hashPassword(tempPassword)
 
     return await this.prisma.$transaction(async (tx) => {
