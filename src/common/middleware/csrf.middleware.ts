@@ -45,6 +45,17 @@ export class CsrfMiddleware implements NestMiddleware {
 
     // Validar en requests mutantes que usan cookie auth
     if (!SAFE_METHODS.has(req.method) && requestUsesOnlyCookieAuth(req)) {
+      // Validate trusted Origin to support Cross-Origin SPAs (Vercel -> Railway)
+      const origin = req.headers.origin || ''
+      const corsOriginRaw = process.env.CORS_ORIGIN || ''
+      const allowedOrigins = corsOriginRaw.split(',').map(o => o.trim())
+      
+      const isVercelPreview = origin.endsWith('.vercel.app')
+
+      if (isVercelPreview || allowedOrigins.includes(origin)) {
+        return next()
+      }
+
       const cookieCsrf = cookies[CSRF_COOKIE_NAME]
 
       if (!cookieCsrf) {

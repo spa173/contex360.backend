@@ -305,10 +305,18 @@ export class AdminService {
 
   async updateTenant(id: string, data: {
     name?: string
+    nit?: string
     sector?: string
     city?: string
     costMethod?: string
     allowNegativeStock?: boolean
+    smtpHost?: string
+    smtpPort?: number
+    smtpUser?: string
+    smtpPassword?: string
+    smtpFromEmail?: string
+    activeIntegrations?: string[]
+    adminSettings?: any
   }) {
     const tenant = await this.prisma.tenant.findUnique({ where: { id } })
     if (!tenant) throw new NotFoundException('Empresa no encontrada.')

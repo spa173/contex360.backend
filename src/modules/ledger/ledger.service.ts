@@ -27,6 +27,28 @@ export class LedgerService {
     })
   }
 
+  async findUnreconciled(tenantId: string) {
+    return this.prisma.ledgerEntry.findMany({
+      where: { tenantId, reconciled: false },
+      include: { lines: true },
+      orderBy: { entryAt: 'desc' },
+    })
+  }
+
+  async reconcileEntry(tenantId: string, id: string) {
+    const entry = await this.prisma.ledgerEntry.findFirst({
+      where: { id, tenantId },
+    })
+    if (!entry) {
+      throw new BadRequestException('Asiento no encontrado.')
+    }
+    return this.prisma.ledgerEntry.update({
+      where: { id },
+      data: { reconciled: true, reconciledAt: new Date() },
+      include: { lines: true },
+    })
+  }
+
   async create(tenantId: string, dto: CreateLedgerEntryDto, tx?: any) {
     if (!dto.lines || dto.lines.length === 0) {
       throw new BadRequestException('El asiento debe tener al menos una línea')

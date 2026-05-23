@@ -136,6 +136,13 @@ model Tenant {
   dianCertificatePassword String?
   dianNit           String?               // NIT para envío DIAN
   dianOperationCode String                 @default("10") // 10: factura ordinaria
+  smtpHost          String?
+  smtpPort          Int?
+  smtpUser          String?
+  smtpPassword      String?
+  smtpFromEmail     String?
+  activeIntegrations String[]               @default([])
+  adminSettings     Json                  @default("{}")
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
   memberships       Membership[]
@@ -386,6 +393,8 @@ model LedgerEntry {
   referenceId   String?
   description   String
   amount        Decimal     @db.Decimal(14, 2)
+  reconciled    Boolean     @default(false)
+  reconciledAt  DateTime?
   entryAt       DateTime    @default(now())
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
@@ -394,6 +403,7 @@ model LedgerEntry {
   lines         LedgerLine[]
 
   @@index([tenantId, entryAt])
+  @@index([tenantId, reconciled])
 }
 
 model LedgerLine {

@@ -58,7 +58,7 @@ function extractAuthToken(request: AuthenticatedRequest) {
   return ''
 }
 
-function resolveCookieOptions(): CookieOptions {
+function resolveCookieOptions(rememberMe: boolean = false): CookieOptions {
   const sameSiteValue = String(process.env.AUTH_COOKIE_SAMESITE || '').trim().toLowerCase()
   const sameSite =
     sameSiteValue === 'strict' || sameSiteValue === 'lax' || sameSiteValue === 'none'
@@ -82,6 +82,10 @@ function resolveCookieOptions(): CookieOptions {
     path: '/',
   }
 
+  if (rememberMe) {
+    options.maxAge = 30 * 24 * 60 * 60 * 1000 // 30 days
+  }
+
   const domain = String(process.env.AUTH_COOKIE_DOMAIN || '').trim()
   if (domain) {
     options.domain = domain
@@ -90,25 +94,25 @@ function resolveCookieOptions(): CookieOptions {
   return options
 }
 
-function setAuthCookie(response: Response, token: string) {
-  response.cookie(AUTH_COOKIE_NAME, token, resolveCookieOptions())
+function setAuthCookie(response: Response, token: string, rememberMe: boolean = false) {
+  response.cookie(AUTH_COOKIE_NAME, token, resolveCookieOptions(rememberMe))
 }
 
 function clearAuthCookie(response: Response) {
   response.clearCookie(AUTH_COOKIE_NAME, resolveCookieOptions())
 }
 
-function setRefreshCookie(response: Response, token: string) {
-  response.cookie(AUTH_REFRESH_COOKIE_NAME, token, resolveCookieOptions())
+function setRefreshCookie(response: Response, token: string, rememberMe: boolean = false) {
+  response.cookie(AUTH_REFRESH_COOKIE_NAME, token, resolveCookieOptions(rememberMe))
 }
 
 function clearRefreshCookie(response: Response) {
   response.clearCookie(AUTH_REFRESH_COOKIE_NAME, resolveCookieOptions())
 }
 
-function setAuthCookies(response: Response, accessToken: string, refreshToken: string) {
-  setAuthCookie(response, accessToken)
-  setRefreshCookie(response, refreshToken)
+function setAuthCookies(response: Response, accessToken: string, refreshToken: string, rememberMe: boolean = false) {
+  setAuthCookie(response, accessToken, rememberMe)
+  setRefreshCookie(response, refreshToken, rememberMe)
 }
 
 function clearAuthCookies(response: Response) {
@@ -135,7 +139,7 @@ export class AuthController {
   ) {
     const result = await this.authService.login(body, resolveRequestContext(request))
     if (response && 'accessToken' in result) {
-      setAuthCookies(response, result.accessToken, result.refreshToken)
+      setAuthCookies(response, result.accessToken, result.refreshToken, body.rememberMe)
     }
     return result
   }
@@ -162,9 +166,9 @@ export class AuthController {
       throw new UnauthorizedException('Refresh token requerido.')
     }
 
-    const result = await this.authService.refresh({ refreshToken }, resolveRequestContext(request))
+    const result = await this.authService.refresh({ refreshToken, rememberMe: body.rememberMe }, resolveRequestContext(request))
     if (response) {
-      setAuthCookies(response, result.accessToken, result.refreshToken)
+      setAuthCookies(response, result.accessToken, result.refreshToken, body.rememberMe)
     }
     return result
   }
