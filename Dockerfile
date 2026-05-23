@@ -40,4 +40,6 @@ EXPOSE 7860
 ENV PORT=7860
 ENV NODE_ENV=production
 
+USER node
+
 CMD ["node", "--max-old-space-size=384", "dist/main.js"]
