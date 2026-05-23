@@ -84,4 +84,68 @@ export class LedgerService {
       include: { lines: true },
     })
   }
+
+  async getBalanceSheet(tenantId: string) {
+    const entries = await this.prisma.ledgerEntry.findMany({
+      where: { tenantId },
+      include: { lines: true },
+    })
+
+    const accounts: Record<string, number> = {}
+    entries.forEach((entry) => {
+      entry.lines.forEach((line) => {
+        const amt = Number(line.debit) - Number(line.credit)
+        accounts[line.account] = (accounts[line.account] || 0) + amt
+      })
+    })
+
+    const createNode = (code: string, name: string, type: any) => ({ code, name, balance: accounts[code] || 0, children: [], type })
+    const assets = [createNode('110505', 'Caja General', 'asset'), createNode('130505', 'Clientes', 'asset')]
+    const liabilities = [createNode('240805', 'IVA por Pagar', 'liability')]
+    const equity = [createNode('310505', 'Capital Social', 'equity')]
+    
+    return {
+      at: new Date().toISOString(),
+      assets,
+      liabilities,
+      equity,
+      totalAssets: assets.reduce((s, n) => s + n.balance, 0),
+      totalLiabilities: liabilities.reduce((s, n) => s + n.balance, 0),
+      totalEquity: equity.reduce((s, n) => s + n.balance, 0),
+    }
+  }
+
+  async getProfitAndLoss(tenantId: string) {
+    const entries = await this.prisma.ledgerEntry.findMany({
+      where: { tenantId },
+      include: { lines: true },
+    })
+
+    const accounts: Record<string, number> = {}
+    entries.forEach((entry) => {
+      entry.lines.forEach((line) => {
+        // Income statements usually show positive values for credits (Revenue) and debits (Expenses)
+        const amt = Number(line.credit) - Number(line.debit)
+        accounts[line.account] = (accounts[line.account] || 0) + amt
+      })
+    })
+
+    const revenue = [{ code: '413595', name: 'Ingresos Operacionales', balance: accounts['413595'] || 0, children: [], type: 'revenue' }]
+    const costs = [{ code: '613505', name: 'Costo de Ventas', balance: -(accounts['613505'] || 0), children: [], type: 'cost' }]
+    const expenses = [{ code: '510505', name: 'Gastos de Personal', balance: -(accounts['510505'] || 0), children: [], type: 'expense' }, { code: '510000', name: 'Gastos operacionales de compra', balance: -(accounts['510000'] || 0), children: [], type: 'expense' }]
+    
+    const gross = revenue[0].balance - costs[0].balance
+    const net = gross - expenses.reduce((s, n) => s + n.balance, 0)
+
+    return {
+      from: '2026-01-01',
+      to: new Date().toISOString(),
+      revenue,
+      costs,
+      expenses,
+      grossProfit: gross,
+      operatingProfit: gross,
+      netProfit: net,
+    }
+  }
 }

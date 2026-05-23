@@ -4,6 +4,7 @@ import { Permissions } from '../auth/permissions.decorator'
 import { AuthGuard } from '../auth/auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import { TenantId } from '../../common/decorators/tenant.decorator'
+import { AuthUser } from '../../common/decorators/auth-user.decorator'
 import { InventoryMovementType } from '@prisma/client'
 
 @Controller('inventory')
@@ -28,14 +29,79 @@ export class InventoryController {
       reason: string
       batch?: string
       note?: string
+      referenceId?: string
+      attachmentUrl?: string
     },
+    @AuthUser('id') userId: string
   ) {
-    return this.inventoryService.createMovement(tenantId, data)
+    return this.inventoryService.createMovement(tenantId, { ...data, userId })
   }
 
   @Get('kardex/:productId')
   @Permissions('view_inventory')
   getKardex(@TenantId() tenantId: string, @Param('productId') productId: string) {
     return this.inventoryService.getKardex(tenantId, productId)
+  }
+
+  // --- Transactions ---
+
+  @Post('transfer')
+  @Permissions('manage_inventory')
+  transferStock(
+    @TenantId() tenantId: string,
+    @Body() payload: { productId: string, fromLocId: string, toLocId: string, quantity: number },
+    @AuthUser('id') userId: string
+  ) {
+    return this.inventoryService.transferStock(tenantId, { ...payload, userId })
+  }
+
+  @Post('receive-transfer/:transferId')
+  @Permissions('manage_inventory')
+  receiveTransfer(
+    @TenantId() tenantId: string,
+    @Param('transferId') transferId: string,
+    @AuthUser('id') userId: string
+  ) {
+    return this.inventoryService.receiveTransfer(tenantId, transferId, userId)
+  }
+
+  @Post('audit')
+  @Permissions('manage_inventory')
+  auditInventory(
+    @TenantId() tenantId: string,
+    @Body('adjustments') adjustments: any[],
+    @AuthUser('id') userId: string
+  ) {
+    return this.inventoryService.auditInventory(tenantId, adjustments, userId)
+  }
+
+  @Post('receive')
+  @Permissions('manage_inventory')
+  receiveInventory(
+    @TenantId() tenantId: string,
+    @Body() payload: { productId: string, quantity: number, unitCost: number, locId: string },
+    @AuthUser('id') userId: string
+  ) {
+    return this.inventoryService.receiveInventory(tenantId, { ...payload, userId })
+  }
+
+  // --- Analytics ---
+
+  @Get('analytics/dead')
+  @Permissions('view_inventory')
+  getDeadInventory(@TenantId() tenantId: string) {
+    return this.inventoryService.getDeadInventory(tenantId)
+  }
+
+  @Get('analytics/reorder')
+  @Permissions('view_inventory')
+  getReorderSuggestions(@TenantId() tenantId: string) {
+    return this.inventoryService.getReorderSuggestions(tenantId)
+  }
+
+  @Get('analytics/abc')
+  @Permissions('view_inventory')
+  getAbcAnalysis(@TenantId() tenantId: string) {
+    return this.inventoryService.getAbcAnalysis(tenantId)
   }
 }
