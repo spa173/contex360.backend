@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: contex360-backend
+    env: docker
+    region: ohio
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        sync: false
+      - key: APP_NAME
+        value: Contex360 API
