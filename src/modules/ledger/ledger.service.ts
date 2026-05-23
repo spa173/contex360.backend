@@ -29,7 +29,7 @@ export class LedgerService {
 
   async findUnreconciled(tenantId: string) {
     return this.prisma.ledgerEntry.findMany({
-      where: { tenantId, reconciled: false },
+      where: { tenantId, reconciled: false } as any,
       include: { lines: true },
       orderBy: { entryAt: 'desc' },
     })
@@ -44,7 +44,7 @@ export class LedgerService {
     }
     return this.prisma.ledgerEntry.update({
       where: { id },
-      data: { reconciled: true, reconciledAt: new Date() },
+      data: { reconciled: true, reconciledAt: new Date() } as any,
       include: { lines: true },
     })
   }

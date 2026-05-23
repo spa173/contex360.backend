@@ -107,7 +107,7 @@ export class InventoryService {
           toLocId: payload.toLocId,
           quantity: payload.quantity,
           status: 'en_transito',
-        }
+        } as any
       })
 
       // Create Movement (Salida)
@@ -134,7 +134,7 @@ export class InventoryService {
       const transfer = await tx.inventoryTransfer.findFirst({ where: { id: transferId, tenantId } })
       if (!transfer || transfer.status !== 'en_transito') throw new BadRequestException('Traslado no valido')
 
-      const product = await tx.product.findUnique({ where: { id: transfer.productId } })
+      const product = await tx.product.findUnique({ where: { id: (transfer as any).productId } })
       if (!product) throw new BadRequestException('Producto no encontrado')
 
       const stockByLocation = (product.stockByLocation as Record<string, number>) || {}
