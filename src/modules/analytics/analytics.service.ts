@@ -265,7 +265,7 @@ export class AnalyticsService {
       const d = new Date()
       d.setDate(d.getDate() + i)
       const dateStr = d.toISOString().split('T')[0]
-      lastBalance += slope + (Math.sin(i) * (slope * 0.1 || 50000))
+      lastBalance += slope + (Math.sin(i) * (slope * 0.1))
       projectedPoints.push({
         date: dateStr,
         balance: Math.max(0, lastBalance),

@@ -184,7 +184,7 @@ export class PurchasesService {
             credit: total,
           },
         ],
-      })
+      }, tx)
 
       return purchase
     })

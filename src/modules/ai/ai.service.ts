@@ -871,4 +871,73 @@ Sé muy directo, profesional e inteligente. Solo devuelve el párrafo sin explic
       }
     }
   }
+
+  async generateThirdPartyInsights(tenantId: string) {
+    try {
+      const thirdParties = await this.prisma.thirdParty.findMany({
+        where: { tenantId },
+        include: { invoices: { select: { total: true, status: true, dueAt: true } } }
+      })
+
+      if (thirdParties.length === 0) {
+        return {
+          title: 'Análisis de Cartera',
+          insight: 'Registra tus primeros clientes o proveedores para obtener análisis de riesgo e insights inteligentes de cartera.',
+          actionText: 'Crear tercero',
+          targetName: null,
+          risk: { level: 0, trend: 'stable' }
+        }
+      }
+
+      let overdueCount = 0
+      let totalPortfolio = 0
+      let worstClient = null
+      let maxOverdue = 0
+
+      const now = new Date()
+
+      thirdParties.forEach(tp => {
+        let tpOverdue = 0
+        tp.invoices.forEach(inv => {
+          totalPortfolio += Number(inv.total)
+          if (inv.status === 'emitted' && inv.dueAt && inv.dueAt < now) {
+            overdueCount++
+            tpOverdue += Number(inv.total)
+          }
+        })
+        if (tpOverdue > maxOverdue) {
+          maxOverdue = tpOverdue
+          worstClient = tp.name
+        }
+      })
+
+      const riskLevel = totalPortfolio > 0 ? (maxOverdue / totalPortfolio) * 100 : 0
+
+      if (worstClient && maxOverdue > 0) {
+        return {
+          title: 'Validación de Cartera',
+          insight: `Detectamos alto riesgo de impago en ${worstClient}. Concentra ${((maxOverdue/totalPortfolio)*100).toFixed(1)}% de la cartera vencida total.`,
+          actionText: 'Revisar cliente',
+          targetName: worstClient,
+          risk: { level: riskLevel, trend: 'up' }
+        }
+      }
+
+      return {
+        title: 'Validación Legal y Riesgo',
+        insight: 'Tu cartera de terceros está saludable. No se detectan anomalías crediticias ni documentos vencidos.',
+        actionText: 'Ver reporte',
+        targetName: null,
+        risk: { level: riskLevel, trend: 'down' }
+      }
+    } catch {
+      return {
+        title: 'Análisis de Cartera',
+        insight: 'ContexAI está procesando el comportamiento histórico de tus terceros.',
+        actionText: 'Actualizar',
+        targetName: null,
+        risk: { level: 0, trend: 'stable' }
+      }
+    }
+  }
 }

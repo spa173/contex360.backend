@@ -165,6 +165,20 @@ export class InvoicesService {
         data: { invoicesThisMonth: { increment: 1 } },
       })
 
+      // 6. Create Ledger Entry
+      const clientName = (await tx.thirdParty.findUnique({ where: { id: data.clientId } }))?.name || 'Cliente Genérico'
+      await this.ledger.create(tenantId, {
+        referenceType: 'invoice',
+        referenceId: invoice.id,
+        description: `Factura ${invoice.number} - ${clientName}`,
+        amount: total,
+        lines: [
+          { account: '130505', label: 'Clientes nacionales', debit: total, credit: 0 },
+          { account: '413595', label: 'Ingresos operacionales', debit: 0, credit: subtotal },
+          { account: '240805', label: 'IVA generado', debit: 0, credit: taxTotal }
+        ]
+      }, tx)
+
       return invoice
     })
   }

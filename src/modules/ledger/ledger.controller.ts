@@ -39,4 +39,16 @@ export class LedgerController {
   ) {
     return this.ledgerService.create(tenantId, dto)
   }
+
+  @Get('reports/balance-sheet')
+  @Permissions('view_accounting')
+  getBalanceSheet(@TenantId() tenantId: string) {
+    return this.ledgerService.getBalanceSheet(tenantId)
+  }
+
+  @Get('reports/profit-and-loss')
+  @Permissions('view_accounting')
+  getProfitAndLoss(@TenantId() tenantId: string) {
+    return this.ledgerService.getProfitAndLoss(tenantId)
+  }
 }

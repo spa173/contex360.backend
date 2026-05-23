@@ -28,6 +28,7 @@ import { IntegrationsModule } from './modules/integrations/integrations.module'
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module'
 import { HelpCenterModule } from './modules/help-center/help-center.module'
 import { CsrfMiddleware } from './common/middleware/csrf.middleware'
+import { UsersModule } from './modules/users/users.module';
 
 @Module({
   imports: [
@@ -62,6 +63,7 @@ import { CsrfMiddleware } from './common/middleware/csrf.middleware'
     IntegrationsModule,
     SubscriptionsModule,
     HelpCenterModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [

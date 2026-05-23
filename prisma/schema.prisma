@@ -82,84 +82,84 @@ enum DemoRequestStatus {
 }
 
 model User {
-  id                String                @id @default(cuid())
-  name              String
-  email             String                @unique
-  status            UserStatus            @default(active)
-  title             String
-  lastLoginAt       DateTime?
-  isDemoAccount     Boolean               @default(false)
-  isSystemOwner     Boolean               @default(false)
-  passwordHash      String?
-  passwordSalt      String?
-  deactivateAt      DateTime?
-  reassignToUserId  String?
-  policyAcceptedAt  DateTime?
-  policyVersion     String?
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
-  memberships       Membership[]
-  securityProfile   UserSecurityProfile?
-  sessions          UserSession[]
-  refreshTokens     RefreshToken[]
+  id                 String               @id @default(cuid())
+  name               String
+  email              String               @unique
+  status             UserStatus           @default(active)
+  title              String
+  lastLoginAt        DateTime?
+  isDemoAccount      Boolean              @default(false)
+  isSystemOwner      Boolean              @default(false)
+  passwordHash       String?
+  passwordSalt       String?
+  deactivateAt       DateTime?
+  reassignToUserId   String?
+  policyAcceptedAt   DateTime?
+  policyVersion      String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  memberships        Membership[]
+  securityProfile    UserSecurityProfile?
+  sessions           UserSession[]
+  refreshTokens      RefreshToken[]
   inventoryMovements InventoryMovement[]
-  invoicesOwned     Invoice[]             @relation("InvoiceOwner")
-  auditEvents       AuditEvent[]          @relation("AuditActorUser")
-  roleAccessHistory RoleAccessHistory[]    @relation("RoleAccessActorUser")
+  invoicesOwned      Invoice[]            @relation("InvoiceOwner")
+  auditEvents        AuditEvent[]         @relation("AuditActorUser")
+  roleAccessHistory  RoleAccessHistory[]  @relation("RoleAccessActorUser")
 }
 
 model Tenant {
-  id                String                @id @default(cuid())
-  name              String
-  prefix            String                @unique
-  nit               String?
-  address           String?
-  phone             String?
-  allowNegativeStock Boolean               @default(false)
-  sector            String?
-  city              String?
-  costMethod        String?
-  dianStatus        String?
-  securitySettings  Json
-  invoicePrefix     String                @default("FV")
-  lastInvoiceNumber Int                   @default(0)
-  invoiceResolution String?
-  resolutionFrom    DateTime?
-  resolutionTo      DateTime?
-  purchasePrefix    String                @default("CO")
-  lastPurchaseNumber Int                  @default(0)
-  dianEnvironment   String                @default("test") // test | production
-  dianTestSetId     String?
-  dianSoftwareId    String?
-  dianSoftwarePin   String?
-  dianCertificate   String?               // Base64 del certificado
+  id                      String              @id @default(cuid())
+  name                    String
+  prefix                  String              @unique
+  nit                     String?
+  address                 String?
+  phone                   String?
+  allowNegativeStock      Boolean             @default(false)
+  sector                  String?
+  city                    String?
+  costMethod              String?
+  dianStatus              String?
+  securitySettings        Json
+  invoicePrefix           String              @default("FV")
+  lastInvoiceNumber       Int                 @default(0)
+  invoiceResolution       String?
+  resolutionFrom          DateTime?
+  resolutionTo            DateTime?
+  purchasePrefix          String              @default("CO")
+  lastPurchaseNumber      Int                 @default(0)
+  dianEnvironment         String              @default("test") // test | production
+  dianTestSetId           String?
+  dianSoftwareId          String?
+  dianSoftwarePin         String?
+  dianCertificate         String? // Base64 del certificado
   dianCertificatePassword String?
-  dianNit           String?               // NIT para envío DIAN
-  dianOperationCode String                 @default("10") // 10: factura ordinaria
-  smtpHost          String?
-  smtpPort          Int?
-  smtpUser          String?
-  smtpPassword      String?
-  smtpFromEmail     String?
-  activeIntegrations String[]               @default([])
-  adminSettings     Json                  @default("{}")
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
-  memberships       Membership[]
-  thirdParties      ThirdParty[]
-  products          Product[]
-  invoices          Invoice[]
-  purchases         Purchase[]
-  ledgerEntries     LedgerEntry[]
-  inventoryMovements InventoryMovement[]
-  inventoryTransfers InventoryTransfer[]
-  ocrRuns           OcrRun[]
-  userSessions      UserSession[]
-  auditEvents       AuditEvent[]
-  roleAccessHistory RoleAccessHistory[]
-  subscription      Subscription?
-  transactions       Transaction[]
-  quotes             Quote[]
+  dianNit                 String? // NIT para envío DIAN
+  dianOperationCode       String              @default("10") // 10: factura ordinaria
+  smtpHost                String?
+  smtpPort                Int?
+  smtpUser                String?
+  smtpPassword            String?
+  smtpFromEmail           String?
+  activeIntegrations      String[]            @default([])
+  adminSettings           Json                @default("{}")
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+  memberships             Membership[]
+  thirdParties            ThirdParty[]
+  products                Product[]
+  invoices                Invoice[]
+  purchases               Purchase[]
+  ledgerEntries           LedgerEntry[]
+  inventoryMovements      InventoryMovement[]
+  inventoryTransfers      InventoryTransfer[]
+  ocrRuns                 OcrRun[]
+  userSessions            UserSession[]
+  auditEvents             AuditEvent[]
+  roleAccessHistory       RoleAccessHistory[]
+  subscription            Subscription?
+  transactions            Transaction[]
+  quotes                  Quote[]
 }
 
 model Membership {
@@ -178,21 +178,21 @@ model Membership {
 }
 
 model ThirdParty {
-  id                      String         @id @default(cuid())
-  tenantId                String
-  name                    String
-  nit                     String
-  email                   String
-  phone                   String?
-  address                 String?
-  city                    String?
-  kind                    ThirdPartyKind
-  taxProfile              String
-  taxRegime               TaxRegime      @default(comun)
-  fiscalResponsibilities  String[]       @default([])
-  isActive                Boolean        @default(true)
-  createdAt               DateTime       @default(now())
-  updatedAt               DateTime       @updatedAt
+  id                     String         @id @default(cuid())
+  tenantId               String
+  name                   String
+  nit                    String
+  email                  String
+  phone                  String?
+  address                String?
+  city                   String?
+  kind                   ThirdPartyKind
+  taxProfile             String
+  taxRegime              TaxRegime      @default(comun)
+  fiscalResponsibilities String[]       @default([])
+  isActive               Boolean        @default(true)
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
 
   tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   invoices  Invoice[]
@@ -205,31 +205,32 @@ model ThirdParty {
 }
 
 model Product {
-  id               String              @id @default(cuid())
-  tenantId         String
-  sku              String
-  name             String
-  price            Decimal             @db.Decimal(14, 2)
-  cost             Decimal             @db.Decimal(14, 2)
-  taxRate          Decimal             @db.Decimal(5, 2)
-  stock            Int                 @default(0)
-  stockByLocation  Json
-  minStock         Int                 @default(0)
-  maxStock         Int                 @default(0)
-  location         String
-  category         String
-  barcode          String
-  isInventoriable  Boolean             @default(true)
-  productType      String
-  kitComponents    Json?
-  unit             String
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  id              String   @id @default(cuid())
+  tenantId        String
+  sku             String
+  name            String
+  price           Decimal  @db.Decimal(14, 2)
+  cost            Decimal  @db.Decimal(14, 2)
+  taxRate         Decimal  @db.Decimal(5, 2)
+  stock           Int      @default(0)
+  stockByLocation Json
+  minStock        Int      @default(0)
+  maxStock        Int      @default(0)
+  location        String
+  category        String
+  barcode         String
+  isInventoriable Boolean  @default(true)
+  productType     String
+  kitComponents   Json?
+  unit            String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   invoiceItems       InvoiceItem[]
   purchaseItems      PurchaseItem[]
   inventoryMovements InventoryMovement[]
+  inventoryTransfers InventoryTransfer[]
   quoteItems         QuoteItem[]
 
   @@unique([tenantId, sku])
@@ -237,26 +238,26 @@ model Product {
 }
 
 model Invoice {
-  id             String         @id @default(cuid())
-  tenantId       String
-  clientId       String?
-  ownerUserId    String?
-  number         String         @default("")
-  status         InvoiceStatus   @default(draft)
-  subtotal       Decimal         @db.Decimal(14, 2)
-  taxTotal       Decimal         @db.Decimal(14, 2)
-  total          Decimal         @db.Decimal(14, 2)
-  paymentTermDays Int            @default(30)
-  notes          String?
-  issuedAt       DateTime       @default(now())
-  dueAt          DateTime?
-  timeline       Json?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  id              String        @id @default(cuid())
+  tenantId        String
+  clientId        String?
+  ownerUserId     String?
+  number          String        @default("")
+  status          InvoiceStatus @default(draft)
+  subtotal        Decimal       @db.Decimal(14, 2)
+  taxTotal        Decimal       @db.Decimal(14, 2)
+  total           Decimal       @db.Decimal(14, 2)
+  paymentTermDays Int           @default(30)
+  notes           String?
+  issuedAt        DateTime      @default(now())
+  dueAt           DateTime?
+  timeline        Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
-  tenant   Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  client   ThirdParty?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  ownerUser User?       @relation("InvoiceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client       ThirdParty?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  ownerUser    User?         @relation("InvoiceOwner", fields: [ownerUserId], references: [id], onDelete: SetNull)
   items        InvoiceItem[]
   transactions Transaction[]
 
@@ -279,7 +280,7 @@ model InvoiceItem {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([invoiceId])
@@ -295,24 +296,24 @@ enum QuoteStatus {
 }
 
 model Quote {
-  id             String      @id @default(cuid())
-  tenantId       String
-  clientId       String?
-  number         String      @default("")
-  status         QuoteStatus @default(draft)
-  subtotal       Decimal     @db.Decimal(14, 2)
-  taxTotal       Decimal     @db.Decimal(14, 2)
-  total          Decimal     @db.Decimal(14, 2)
-  validUntil     DateTime?
-  notes          String?
-  terms          String?
+  id                   String      @id @default(cuid())
+  tenantId             String
+  clientId             String?
+  number               String      @default("")
+  status               QuoteStatus @default(draft)
+  subtotal             Decimal     @db.Decimal(14, 2)
+  taxTotal             Decimal     @db.Decimal(14, 2)
+  total                Decimal     @db.Decimal(14, 2)
+  validUntil           DateTime?
+  notes                String?
+  terms                String?
   convertedToInvoiceId String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
 
-  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  client   ThirdParty? @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  items    QuoteItem[]
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  client ThirdParty? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  items  QuoteItem[]
 
   @@index([tenantId, status])
   @@index([tenantId, createdAt])
@@ -333,7 +334,7 @@ model QuoteItem {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  quote   Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  quote   Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([quoteId])
@@ -341,23 +342,23 @@ model QuoteItem {
 }
 
 model Purchase {
-  id             String         @id @default(cuid())
-  tenantId       String
-  providerId     String?
-  number         String         @default("")
-  status         PurchaseStatus @default(draft)
-  subtotal       Decimal        @db.Decimal(14, 2)
-  taxTotal       Decimal        @db.Decimal(14, 2)
-  total          Decimal        @db.Decimal(14, 2)
-  paymentTermDays Int           @default(30)
-  notes          String?
-  issuedAt       DateTime       @default(now())
-  dueAt          DateTime?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  id              String         @id @default(cuid())
+  tenantId        String
+  providerId      String?
+  number          String         @default("")
+  status          PurchaseStatus @default(draft)
+  subtotal        Decimal        @db.Decimal(14, 2)
+  taxTotal        Decimal        @db.Decimal(14, 2)
+  total           Decimal        @db.Decimal(14, 2)
+  paymentTermDays Int            @default(30)
+  notes           String?
+  issuedAt        DateTime       @default(now())
+  dueAt           DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
-  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  provider ThirdParty? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider     ThirdParty?    @relation(fields: [providerId], references: [id], onDelete: SetNull)
   items        PurchaseItem[]
   transactions Transaction[]
 
@@ -366,63 +367,63 @@ model Purchase {
 }
 
 model PurchaseItem {
-  id           String   @id @default(cuid())
-  purchaseId   String
-  productId    String?
-  lineNumber   Int
-  productName  String
-  quantity     Int
-  unitPrice    Decimal  @db.Decimal(14, 2)
-  taxRate      Decimal  @db.Decimal(5, 2)
-  subtotal     Decimal  @db.Decimal(14, 2)
-  taxAmount    Decimal  @db.Decimal(14, 2)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(cuid())
+  purchaseId  String
+  productId   String?
+  lineNumber  Int
+  productName String
+  quantity    Int
+  unitPrice   Decimal  @db.Decimal(14, 2)
+  taxRate     Decimal  @db.Decimal(5, 2)
+  subtotal    Decimal  @db.Decimal(14, 2)
+  taxAmount   Decimal  @db.Decimal(14, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  purchase Purchase  @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
-  product  Product?  @relation(fields: [productId], references: [id], onDelete: SetNull)
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  product  Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([purchaseId])
   @@index([productId])
 }
 
 model LedgerEntry {
-  id            String      @id @default(cuid())
+  id            String    @id @default(cuid())
   tenantId      String
   referenceType String
   referenceId   String?
   description   String
-  amount        Decimal     @db.Decimal(14, 2)
-  reconciled    Boolean     @default(false)
+  amount        Decimal   @db.Decimal(14, 2)
+  reconciled    Boolean   @default(false)
   reconciledAt  DateTime?
-  entryAt       DateTime    @default(now())
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  entryAt       DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  lines         LedgerLine[]
+  tenant Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lines  LedgerLine[]
 
   @@index([tenantId, entryAt])
   @@index([tenantId, reconciled])
 }
 
 model LedgerLine {
-  id            String      @id @default(cuid())
+  id            String   @id @default(cuid())
   ledgerEntryId String
   account       String
   label         String
-  debit         Decimal     @db.Decimal(14, 2)
-  credit        Decimal     @db.Decimal(14, 2)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  debit         Decimal  @db.Decimal(14, 2)
+  credit        Decimal  @db.Decimal(14, 2)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  ledgerEntry   LedgerEntry @relation(fields: [ledgerEntryId], references: [id], onDelete: Cascade)
+  ledgerEntry LedgerEntry @relation(fields: [ledgerEntryId], references: [id], onDelete: Cascade)
 
   @@index([ledgerEntryId])
 }
 
 model InventoryMovement {
-  id             String               @id @default(cuid())
+  id             String                @id @default(cuid())
   tenantId       String
   productId      String
   productName    String
@@ -435,43 +436,46 @@ model InventoryMovement {
   note           String
   referenceId    String?
   attachmentUrl  String?
-  at             DateTime             @default(now())
-  createdAt      DateTime             @default(now())
-  updatedAt      DateTime             @updatedAt
+  at             DateTime              @default(now())
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
 
-  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  product Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
-  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, at])
   @@index([productId, at])
 }
 
 model InventoryTransfer {
-  id         String                 @id @default(cuid())
+  id         String                  @id @default(cuid())
   tenantId   String
+  productId  String
   fromLocId  String
   toLocId    String
   status     InventoryTransferStatus @default(pendiente)
   quantity   Int
   receivedAt DateTime?
-  createdAt  DateTime               @default(now())
-  updatedAt  DateTime               @updatedAt
+  createdAt  DateTime                @default(now())
+  updatedAt  DateTime                @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
 
   @@index([tenantId, status])
+  @@index([productId])
 }
 
 model OcrRun {
-  id          String   @id @default(cuid())
-  tenantId    String
-  source      String
+  id            String   @id @default(cuid())
+  tenantId      String
+  source        String
   sourcePreview String?
-  fields      Json
-  confidence  Float
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  fields        Json
+  confidence    Float
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -479,42 +483,42 @@ model OcrRun {
 }
 
 model UserSecurityProfile {
-  id                    String   @id @default(cuid())
-  userId                String   @unique
-  twoFactorEnabled      Boolean  @default(false)
-  twoFactorRequired     Boolean  @default(false)
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  twoFactorEnabled      Boolean   @default(false)
+  twoFactorRequired     Boolean   @default(false)
   totpSecret            String?
-  passwordResetRequired  Boolean  @default(false)
-  passwordExpiryDays     Int?     @default(90)
-  passwordUpdatedAt      DateTime?
+  passwordResetRequired Boolean   @default(false)
+  passwordExpiryDays    Int?      @default(90)
+  passwordUpdatedAt     DateTime?
   resetRequestedAt      DateTime?
   tempPasswordExpiresAt DateTime?
-  riskLevel             String   @default("low")
+  riskLevel             String    @default("low")
   passwordHistory       Json
-  failedLoginAttempts   Int      @default(0)
+  failedLoginAttempts   Int       @default(0)
   lockedUntil           DateTime?
   trustedFingerprints   Json
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model UserSession {
-  id         String   @id @default(cuid())
-  userId     String
-  tenantId   String
-  ip         String
-  location   String
-  device     String
-  browser    String
-  os         String
+  id          String    @id @default(cuid())
+  userId      String
+  tenantId    String
+  ip          String
+  location    String
+  device      String
+  browser     String
+  os          String
   fingerprint String
-  createdAt  DateTime @default(now())
-  lastSeenAt DateTime
-  revokedAt  DateTime?
-  revokedBy  String?
-  updatedAt  DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  lastSeenAt  DateTime
+  revokedAt   DateTime?
+  revokedBy   String?
+  updatedAt   DateTime  @updatedAt
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -539,18 +543,18 @@ model RefreshToken {
 }
 
 model AuditEvent {
-  id           String        @id @default(cuid())
-  tenantId     String?
-  entity       String
-  action       String
-  description  String
-  at           DateTime      @default(now())
-  actor        String
-  actorUserId  String?
-  severity     AuditSeverity @default(info)
+  id            String        @id @default(cuid())
+  tenantId      String?
+  entity        String
+  action        String
+  description   String
+  at            DateTime      @default(now())
+  actor         String
+  actorUserId   String?
+  severity      AuditSeverity @default(info)
   attachmentUrl String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   tenant    Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
   actorUser User?   @relation("AuditActorUser", fields: [actorUserId], references: [id], onDelete: SetNull)
@@ -560,19 +564,19 @@ model AuditEvent {
 }
 
 model RoleAccessHistory {
-  id        String   @id @default(cuid())
-  at        DateTime @default(now())
-  actor     String
+  id          String   @id @default(cuid())
+  at          DateTime @default(now())
+  actor       String
   actorUserId String?
-  role      String
-  moduleId  String
-  permission String
-  before    Boolean
-  after     Boolean
-  snapshot  Json
-  tenantId  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  role        String
+  moduleId    String
+  permission  String
+  before      Boolean
+  after       Boolean
+  snapshot    Json
+  tenantId    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   tenant    Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
   actorUser User?   @relation("RoleAccessActorUser", fields: [actorUserId], references: [id], onDelete: SetNull)
@@ -613,9 +617,9 @@ model Transaction {
   createdAt   DateTime            @default(now())
   updatedAt   DateTime            @updatedAt
 
-  tenant      Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  invoice     Invoice?            @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
-  purchase    Purchase?           @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invoice  Invoice?  @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  purchase Purchase? @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, date])
   @@index([tenantId, type])
@@ -670,15 +674,15 @@ model SupportTicket {
 }
 
 model Subscription {
-  id                String   @id @default(cuid())
+  id                String    @id @default(cuid())
   tenantId          String
   planType          String
-  active            Boolean  @default(true)
+  active            Boolean   @default(true)
   trialEndsAt       DateTime?
   renewsAt          DateTime?
-  invoicesThisMonth Int      @default(0)
+  invoicesThisMonth Int       @default(0)
 
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId])
 }
