@@ -5,18 +5,26 @@ import { PLANS } from './plans.config';
 
 @Injectable()
 export class WompiService {
-  private readonly wompiUrl = 'https://api.wompi.co/v1';
+  private get wompiUrl() {
+    return process.env.WOMPI_API_URL || 'https://production.wompi.co/v1';
+  }
 
   private get publicKey() {
-    return process.env.WOMPI_PUBLIC_KEY || 'pub_test_fake_public_key';
+    const key = process.env.WOMPI_PUBLIC_KEY;
+    if (!key) throw new HttpException('WOMPI_PUBLIC_KEY no configurado en producción', HttpStatus.INTERNAL_SERVER_ERROR);
+    return key;
   }
 
   private get privateKey() {
-    return process.env.WOMPI_PRIVATE_KEY || 'prv_test_fake_private_key';
+    const key = process.env.WOMPI_PRIVATE_KEY;
+    if (!key) throw new HttpException('WOMPI_PRIVATE_KEY no configurado en producción', HttpStatus.INTERNAL_SERVER_ERROR);
+    return key;
   }
 
   private get webhookSecret() {
-    return process.env.WOMPI_EVENTS_SECRET || process.env.WOMPI_WEBHOOK_SECRET || 'wsec_test_fake_webhook_secret';
+    const secret = process.env.WOMPI_EVENTS_SECRET || process.env.WOMPI_WEBHOOK_SECRET;
+    if (!secret) throw new HttpException('WOMPI_EVENTS_SECRET no configurado en producción', HttpStatus.INTERNAL_SERVER_ERROR);
+    return secret;
   }
 
   async createPaymentLink(
