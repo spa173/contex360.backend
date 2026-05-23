@@ -42,4 +42,9 @@ export class AiController {
   getInsights(@TenantId() tenantId: string) {
     return this.aiService.generateDashboardInsights(tenantId)
   }
+
+  @Get('third-parties-insights')
+  getThirdPartiesInsights(@TenantId() tenantId: string) {
+    return this.aiService.generateThirdPartyInsights(tenantId)
+  }
 }
