@@ -464,7 +464,7 @@ export class AiService {
         const wikiRes = await fetch(`https://es.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(message.trim())}&format=json&origin=*`)
         const wikiData = await wikiRes.json()
         if (wikiData?.query?.search && wikiData.query.search.length > 0) {
-          const snippets = wikiData.query.search.slice(0, 3).map((item: any) => `${item.title}: ${item.snippet.replace(/<\/?[^>]+(>|$)/g, '')}`).join('; ')
+          const snippets = wikiData.query.search.slice(0, 3).map((item: any) => `${item.title}: ${item.snippet.replace(/<[^>]+>/g, '')}`).join('; ')
           liveData = `[BÚSQUEDA GOOGLE/WEB PARA "${message.trim()}"]: ${snippets}`
         }
       } catch (e) {
@@ -822,7 +822,7 @@ ${JSON.stringify(texts, null, 2)}`
         max_tokens: 2048,
       })
       const response = completion.choices[0]?.message?.content ?? '{}'
-      const jsonMatch = response.match(/\{[\s\S]*\}/)
+      const jsonMatch = response.match(/\{[\s\S]*?\}/)
       return JSON.parse(jsonMatch ? jsonMatch[0] : response)
     } catch (error: any) {
       console.error('Translation Error:', safeLogFragment(error.message || error))
