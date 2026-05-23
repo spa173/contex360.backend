@@ -44,6 +44,8 @@ export class UsersService {
           status: 'active',
           isSystemOwner: false,
           isDemoAccount: false,
+          passwordHash: hash,
+          passwordSalt: salt,
         }
       })
 
@@ -51,8 +53,6 @@ export class UsersService {
       await tx.userSecurityProfile.create({
         data: {
           userId: user.id,
-          passwordHash: hash,
-          passwordSalt: salt,
           passwordResetRequired: true,
           twoFactorEnabled: false,
           twoFactorRequired: false,
