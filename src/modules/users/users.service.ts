@@ -26,7 +26,8 @@ export class UsersService {
   }
 
   async createUser(dto: CreateUserDto) {
-    const existing = await this.prisma.user.findUnique({ where: { email: dto.email } })
+    const normalizedEmail = String(dto.email || '').trim().toLowerCase()
+    const existing = await this.prisma.user.findUnique({ where: { email: normalizedEmail } })
     if (existing) {
       throw new BadRequestException('El correo ya está registrado.')
     }
@@ -39,7 +40,7 @@ export class UsersService {
       const user = await tx.user.create({
         data: {
           name: dto.name,
-          email: dto.email,
+          email: normalizedEmail,
           title: dto.title || '',
           status: 'active',
           isSystemOwner: false,
