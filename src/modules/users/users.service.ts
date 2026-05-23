@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../database/prisma.service'
 import * as crypto from 'crypto'
+import * as bcrypt from 'bcryptjs'
 
 export interface CreateUserDto {
   name: string
@@ -18,10 +19,9 @@ export class UsersService {
     return crypto.randomBytes(6).toString('base64').slice(0, 8)
   }
 
-  // Simplified hash for demo/mock logic; in a real app use bcrypt
   async hashPassword(password: string) {
-    const salt = crypto.randomBytes(16).toString('hex')
-    const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex')
+    const salt = await bcrypt.genSalt(10)
+    const hash = await bcrypt.hash(password, salt)
     return { hash, salt }
   }
 
