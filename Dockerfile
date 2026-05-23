@@ -35,9 +35,9 @@ COPY --from=builder /usr/src/app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /usr/src/app/node_modules/@prisma/client ./node_modules/@prisma/client
 COPY --from=builder /usr/src/app/dist ./dist
 
-EXPOSE 3000
+EXPOSE 7860
 
-ENV PORT=3000
+ENV PORT=7860
 ENV NODE_ENV=production
 
 CMD ["node", "--max-old-space-size=384", "dist/main.js"]
