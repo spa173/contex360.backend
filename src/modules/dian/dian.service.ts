@@ -156,7 +156,8 @@ function normalizeEnvironment(value: string | null | undefined): DianEnvironment
 }
 
 function resolveIdentificationType(nit: string) {
-  return digitsOnly(nit).length > 10 ? '31' : '31'
+  // 31: NIT, 13: Cédula de Ciudadanía
+  return digitsOnly(nit).length >= 10 ? '31' : '13'
 }
 
 function resolvePaymentMeans() {
