@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Req, UnauthorizedException, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Req, UnauthorizedException, UseGuards, Query } from '@nestjs/common'
 import { AuthGuard } from '../auth/auth.guard'
 import { AdminGuard } from '../auth/admin.guard'
 import { AdminService } from './admin.service'
@@ -20,8 +20,8 @@ export class AdminController {
   }
 
   @Get('users')
-  getUsers() {
-    return this.adminService.getAllUsers()
+  getUsers(@Query('tenantId') tenantId?: string) {
+    return this.adminService.getAllUsers(tenantId)
   }
 
   @Get('audit-logs')

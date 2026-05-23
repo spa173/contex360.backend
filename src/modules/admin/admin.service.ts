@@ -198,8 +198,15 @@ export class AdminService {
     })
   }
 
-  async getAllUsers() {
+  async getAllUsers(tenantId?: string) {
+    const where = tenantId ? {
+      memberships: {
+        some: { tenantId }
+      }
+    } : {}
+
     return this.prisma.user.findMany({
+      where,
       include: {
         memberships: {
           include: { tenant: true },
