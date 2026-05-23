@@ -1,3 +1,13 @@
+---
+title: Contex360 Backend Staging
+emoji: 🚀
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Contex360 Backend
 
 The backend REST API for the Contex360 ERP system. Built with NestJS and Prisma.
