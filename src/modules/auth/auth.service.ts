@@ -314,22 +314,8 @@ export class AuthService {
     const activeTenantIdFromMembership = user.memberships[0]?.tenant.id
     const activeTenantId = activeTenantIdFromMembership || 'system'
 
-    if (activeTenantId === 'system') {
-      const systemTenantExists = await this.prisma.tenant.findUnique({ where: { id: 'system' } })
-      if (!systemTenantExists) {
-        await this.prisma.tenant.create({
-          data: {
-            id: 'system',
-            name: 'Contex360 Cloud',
-            prefix: 'SYS',
-            securitySettings: {},
-          }
-        })
-      }
-    }
-
     const activeTenant = await this.resolveActiveTenant(user, activeTenantId)
-    const session = await this.createSession(user, activeTenant?.id || 'system', context, now)
+    const session = await this.createSession(user, activeTenant?.id || null, context, now)
 
     const policyData: Prisma.UserUpdateInput = { lastLoginAt: now }
     if (!user.policyAcceptedAt) {
@@ -485,7 +471,7 @@ export class AuthService {
 
   private async createSession(
     user: UserWithAuthRelations,
-    tenantId: string,
+    tenantId: string | null,
     context: AuthRequestContext,
     now: Date,
   ): Promise<UserSession> {
