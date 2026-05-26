@@ -129,7 +129,7 @@ export interface PublicUserSnapshot {
 export interface PublicSessionSnapshot {
   id: string
   userId: string
-  tenantId: string
+  tenantId: string | null
   ip: string
   location: string
   device: string
