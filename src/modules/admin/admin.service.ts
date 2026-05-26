@@ -640,7 +640,7 @@ export class AdminService {
     }
 
     for (const session of sessions) {
-      const tenantSummary = tenantMap.get(session.tenantId)
+      const tenantSummary = session.tenantId ? tenantMap.get(session.tenantId) : undefined
       const isActiveSession = !session.revokedAt
       const isStaleSession = isActiveSession && isBeforeThreshold(session.lastSeenAt, staleSessionThreshold)
       const sessionUser = session.user ? userMap.get(session.user.id) : null
