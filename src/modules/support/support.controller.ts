@@ -1,11 +1,10 @@
-import { Body, Controller, Get, Param, Post, Put, UseGuards } from '@nestjs/common'
+import { Body, Controller, Get, Param, Post, Put, UseGuards, Req } from '@nestjs/common'
 import { SupportService } from './support.service'
 import { AuthGuard } from '../auth/auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import { Permissions } from '../auth/permissions.decorator'
 import { TenantId } from '../../common/decorators/tenant.decorator'
 import { AuthenticatedRequest } from '../auth/auth.types'
-import { Req } from '@nestjs/common'
 import { CreateTicketDto } from './support.dto'
 
 @Controller('support')

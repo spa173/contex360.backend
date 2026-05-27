@@ -1,7 +1,6 @@
 import { Injectable, OnModuleInit, OnApplicationShutdown } from '@nestjs/common'
 import { PrismaClient } from '@prisma/client'
-import { AsyncLocalStorage } from 'async_hooks'
-import { hashSync } from 'bcryptjs'
+import { AsyncLocalStorage } from 'node:async_hooks'
 
 function safeLogFragment(value: unknown) {
   return String(value ?? '').replace(/[\r\n]+/g, ' ').trim().slice(0, 240)
