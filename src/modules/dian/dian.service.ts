@@ -3,7 +3,7 @@ import { InvoiceStatus, Prisma } from '@prisma/client'
 import * as soap from 'soap'
 import * as forge from 'node-forge'
 import { SignedXml } from 'xml-crypto'
-import { createHash, randomUUID } from 'crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { PrismaService } from '../database/prisma.service'
 import { InvoiceMailerService } from '../invoices/invoice-mailer.service'
 

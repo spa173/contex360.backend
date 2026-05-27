@@ -117,7 +117,11 @@ export async function bootstrap() {
   return app
 }
 
-export const viteNodeApp = process.env.VITE ? bootstrap() : null;
+export const viteNodeApp = process.env.VITE
+  ? bootstrap().catch((err: unknown) => {
+      logger.error('Failed to bootstrap Vite app', err instanceof Error ? err.stack ?? err.message : String(err))
+    })
+  : null;
 
 if (!process.env.VITE) {
   bootstrap().catch((error: unknown) => {

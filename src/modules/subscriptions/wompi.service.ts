@@ -1,6 +1,6 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import axios from 'axios';
-import * as crypto from 'crypto';
+import * as crypto from 'node:crypto';
 import { PLANS } from './plans.config';
 
 @Injectable()

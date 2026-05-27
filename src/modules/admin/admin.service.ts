@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { AuditSeverity, Prisma, UserStatus } from '@prisma/client'
-import { createHash, randomBytes } from 'crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { hashSync, compare } from 'bcryptjs'
 import { PrismaService } from '../database/prisma.service'
 import { NotificationService } from '../notification/notification.service'
@@ -173,7 +173,7 @@ function isAdminMembership(role: string) {
 }
 
 function createPlainObject<T>(value: T) {
-  return JSON.parse(JSON.stringify(value)) as T
+  return structuredClone(value)
 }
 
 @Injectable()
