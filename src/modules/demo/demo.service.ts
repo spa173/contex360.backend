@@ -4,14 +4,15 @@ import { NotificationService } from '../notification/notification.service';
 import { hash } from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
 
-function safeLogMessage(value: unknown) {
-  const message = value instanceof Error
-    ? value.message || value.name
-    : typeof value === 'string'
-      ? value
-      : String(value ?? '');
-
-  return message.replace(/[\r\n]+/g, ' ').trim().slice(0, 240);
+function safeLogMessage(value: unknown): string {
+  if (value instanceof Error) {
+    return (value.message || value.name).replace(/[\r\n]+/g, ' ').trim().slice(0, 240);
+  }
+  if (typeof value === 'string') {
+    return value.replace(/[\r\n]+/g, ' ').trim().slice(0, 240);
+  }
+  const stringified = value === null || value === undefined ? '' : String(value);
+  return stringified.replace(/[\r\n]+/g, ' ').trim().slice(0, 240);
 }
 
 @Injectable()
@@ -224,8 +225,8 @@ export class DemoService {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%&*';
     const bytes = randomBytes(12);
     let password = '';
-    for (let i = 0; i < bytes.length; i++) {
-      password += chars.charAt(bytes[i] % chars.length);
+    for (const byte of bytes) {
+      password += chars.charAt(byte % chars.length);
     }
     return password;
   }
