@@ -1,18 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../database/prisma.service'
 import { LedgerService } from '../ledger/ledger.service'
 import { TransactionType, TransactionCategory } from '@prisma/client'
-
-export interface CreateTransactionDto {
-  type: TransactionType
-  amount: number
-  date?: string
-  description: string
-  category?: TransactionCategory
-  reference?: string
-  invoiceId?: string
-  purchaseId?: string
-}
+import { CreateTransactionDto } from './treasury.dto'
 
 @Injectable()
 export class TreasuryService {
@@ -64,10 +54,16 @@ export class TreasuryService {
     if (dto.invoiceId) {
       const inv = await this.prisma.invoice.findFirst({ where: { id: dto.invoiceId, tenantId } })
       if (!inv) throw new NotFoundException('Factura no encontrada')
+      if (Math.abs(Number(dto.amount) - Number(inv.total)) > 0.01) {
+        throw new BadRequestException(`El monto ${dto.amount} no coincide con el total de la factura ${inv.total}.`)
+      }
     }
     if (dto.purchaseId) {
       const pur = await this.prisma.purchase.findFirst({ where: { id: dto.purchaseId, tenantId } })
       if (!pur) throw new NotFoundException('Compra no encontrada')
+      if (Math.abs(Number(dto.amount) - Number(pur.total)) > 0.01) {
+        throw new BadRequestException(`El monto ${dto.amount} no coincide con el total de la compra ${pur.total}.`)
+      }
     }
 
     const transaction = await this.prisma.transaction.create({

@@ -82,30 +82,36 @@ enum DemoRequestStatus {
 }
 
 model User {
-  id                 String               @id @default(cuid())
-  name               String
-  email              String               @unique
-  status             UserStatus           @default(active)
-  title              String
-  lastLoginAt        DateTime?
-  isDemoAccount      Boolean              @default(false)
-  isSystemOwner      Boolean              @default(false)
-  passwordHash       String?
-  passwordSalt       String?
-  deactivateAt       DateTime?
-  reassignToUserId   String?
-  policyAcceptedAt   DateTime?
-  policyVersion      String?
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
-  memberships        Membership[]
-  securityProfile    UserSecurityProfile?
-  sessions           UserSession[]
-  refreshTokens      RefreshToken[]
-  inventoryMovements InventoryMovement[]
-  invoicesOwned      Invoice[]            @relation("InvoiceOwner")
-  auditEvents        AuditEvent[]         @relation("AuditActorUser")
-  roleAccessHistory  RoleAccessHistory[]  @relation("RoleAccessActorUser")
+  id                       String               @id @default(cuid())
+  name                     String
+  email                    String               @unique
+  status                   UserStatus           @default(active)
+  title                    String
+  lastLoginAt              DateTime?
+  isDemoAccount            Boolean              @default(false)
+  isSystemOwner            Boolean              @default(false)
+  passwordHash             String?
+  passwordSalt             String?
+  deactivateAt             DateTime?
+  reassignToUserId         String?
+  policyAcceptedAt         DateTime?
+  policyVersion            String?
+  privacyConsentAt         DateTime?
+  privacyConsentVersion    String?
+  termsAcceptedAt          DateTime?
+  emailVerified            Boolean              @default(false)
+  emailVerificationToken   String?
+  emailVerificationExpires DateTime?
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+  memberships              Membership[]
+  securityProfile          UserSecurityProfile?
+  sessions                 UserSession[]
+  refreshTokens            RefreshToken[]
+  inventoryMovements       InventoryMovement[]
+  invoicesOwned            Invoice[]            @relation("InvoiceOwner")
+  auditEvents              AuditEvent[]         @relation("AuditActorUser")
+  roleAccessHistory        RoleAccessHistory[]  @relation("RoleAccessActorUser")
 }
 
 model Tenant {
@@ -158,6 +164,8 @@ model Tenant {
   auditEvents             AuditEvent[]
   roleAccessHistory       RoleAccessHistory[]
   subscription            Subscription?
+  payments                Payment[]
+  subscriptionInvoices    SubscriptionInvoice[]
   transactions            Transaction[]
   quotes                  Quote[]
 }
@@ -677,14 +685,68 @@ model Subscription {
   id                String    @id @default(cuid())
   tenantId          String
   planType          String
+  billing           String    @default("monthly")
   active            Boolean   @default(true)
   trialEndsAt       DateTime?
   renewsAt          DateTime?
+  cancelAt          DateTime?
   invoicesThisMonth Int       @default(0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payments            Payment[]
+  subscriptionInvoices SubscriptionInvoice[]
 
   @@unique([tenantId])
+}
+
+model Payment {
+  id                String   @id @default(cuid())
+  tenantId          String
+  subscriptionId    String?
+  wompiTransactionId String?  @unique
+  amount            Int
+  currency          String   @default("COP")
+  status            String   @default("pending")
+  paymentMethod     String?
+  planType          String?
+  billing           String?
+  description       String?
+  paidAt            DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription        Subscription?        @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  subscriptionInvoice SubscriptionInvoice?
+
+  @@index([tenantId, createdAt])
+}
+
+model SubscriptionInvoice {
+  id              String   @id @default(cuid())
+  tenantId        String
+  subscriptionId  String
+  paymentId       String?  @unique
+  invoiceNumber   String   @unique
+  amount          Int
+  tax             Int      @default(0)
+  total           Int
+  status          String   @default("pending")
+  planType        String
+  billing         String
+  periodStart     DateTime
+  periodEnd       DateTime
+  paidAt          DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  payment      Payment?      @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
 }
 
 model HelpCategory {

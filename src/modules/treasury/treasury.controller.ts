@@ -1,12 +1,16 @@
 import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common'
-import { TreasuryService, CreateTransactionDto } from './treasury.service'
+import { TreasuryService } from './treasury.service'
 import { AuthGuard } from '../auth/auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
+import { PlanGuard } from '../auth/plan.guard'
+import { RequirePlanModule } from '../auth/plan.decorator'
 import { Permissions } from '../auth/permissions.decorator'
 import { TenantId } from '../../common/decorators/tenant.decorator'
+import { CreateTransactionDto } from './treasury.dto'
 
 @Controller('treasury')
-@UseGuards(AuthGuard, PermissionsGuard)
+@UseGuards(AuthGuard, PermissionsGuard, PlanGuard)
+@RequirePlanModule('treasury')
 export class TreasuryController {
   constructor(private readonly treasuryService: TreasuryService) {}
 

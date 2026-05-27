@@ -314,6 +314,22 @@ const TOOLS: Groq.Chat.ChatCompletionTool[] = [
   },
 ]
 
+function stripHtmlTags(str: string): string {
+  let result = ''
+  let inTag = false
+  for (let i = 0; i < str.length; i++) {
+    const char = str[i]
+    if (char === '<') {
+      inTag = true
+    } else if (char === '>') {
+      inTag = false
+    } else if (!inTag) {
+      result += char
+    }
+  }
+  return result
+}
+
 @Injectable()
 export class AiService {
   private readonly groq: Groq
@@ -464,7 +480,7 @@ export class AiService {
         const wikiRes = await fetch(`https://es.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(message.trim())}&format=json&origin=*`)
         const wikiData = await wikiRes.json()
         if (wikiData?.query?.search && wikiData.query.search.length > 0) {
-          const snippets = wikiData.query.search.slice(0, 3).map((item: any) => `${item.title}: ${item.snippet.replace(/<[^>]+>/g, '')}`).join('; ')
+          const snippets = wikiData.query.search.slice(0, 3).map((item: any) => `${item.title}: ${stripHtmlTags(item.snippet)}`).join('; ')
           liveData = `[BÚSQUEDA GOOGLE/WEB PARA "${message.trim()}"]: ${snippets}`
         }
       } catch (e) {

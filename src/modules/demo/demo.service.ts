@@ -2,7 +2,7 @@ import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { NotificationService } from '../notification/notification.service';
 import { hash } from 'bcryptjs';
-import { randomBytes } from 'crypto';
+import { randomBytes } from 'node:crypto';
 
 function safeLogMessage(value: unknown) {
   const message = value instanceof Error

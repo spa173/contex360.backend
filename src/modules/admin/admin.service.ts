@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common'
 import { AuditSeverity, Prisma, UserStatus } from '@prisma/client'
-import { createHash, randomBytes } from 'crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { hashSync, compare } from 'bcryptjs'
 import { PrismaService } from '../database/prisma.service'
 import { NotificationService } from '../notification/notification.service'
@@ -173,7 +173,7 @@ function isAdminMembership(role: string) {
 }
 
 function createPlainObject<T>(value: T) {
-  return JSON.parse(JSON.stringify(value)) as T
+  return structuredClone(value)
 }
 
 @Injectable()
@@ -277,6 +277,28 @@ export class AdminService {
   }
 
   async getTenantDetails(id: string) {
+    if (id === 'system') {
+      return {
+        id: 'system',
+        name: 'Contex360 Cloud',
+        prefix: 'SYS',
+        securitySettings: {},
+        memberships: [],
+        subscription: null,
+        activeIntegrations: [],
+        adminSettings: {},
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        _count: {
+          invoices: 0,
+          products: 0,
+          ledgerEntries: 0,
+          ocrRuns: 0,
+          auditEvents: 0,
+        },
+      }
+    }
+
     const tenant = await this.prisma.tenant.findUnique({
       where: { id },
       include: {
@@ -325,6 +347,19 @@ export class AdminService {
     activeIntegrations?: string[]
     adminSettings?: any
   }) {
+    if (id === 'system') {
+      return {
+        id: 'system',
+        name: data.name || 'Contex360 Cloud',
+        prefix: 'SYS',
+        securitySettings: {},
+        activeIntegrations: data.activeIntegrations || [],
+        adminSettings: data.adminSettings || {},
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }
+    }
+
     const tenant = await this.prisma.tenant.findUnique({ where: { id } })
     if (!tenant) throw new NotFoundException('Empresa no encontrada.')
     return this.prisma.tenant.update({ where: { id }, data })
@@ -335,6 +370,15 @@ export class AdminService {
     active?: boolean
     trialEndsAt?: string | null
   }) {
+    if (tenantId === 'system') {
+      return {
+        tenantId: 'system',
+        planType: data.planType || 'enterprise',
+        active: data.active ?? true,
+        trialEndsAt: data.trialEndsAt ? new Date(data.trialEndsAt) : null,
+      }
+    }
+
     const sub = await this.prisma.subscription.findUnique({ where: { tenantId } })
     if (!sub) {
       return this.prisma.subscription.create({
@@ -359,6 +403,13 @@ export class AdminService {
   }
 
   async updateTenantStatus(id: string, status: 'active' | 'suspended') {
+    if (id === 'system') {
+      return {
+        id: 'system',
+        dianStatus: status,
+      }
+    }
+
     const tenant = await this.prisma.tenant.findUnique({ where: { id } })
     if (!tenant) throw new NotFoundException('Empresa no encontrada.')
     return this.prisma.tenant.update({

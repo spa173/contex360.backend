@@ -3,10 +3,14 @@ import { InvoicesService } from './invoices.service'
 import { Permissions } from '../auth/permissions.decorator'
 import { AuthGuard } from '../auth/auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
+import { PlanGuard } from '../auth/plan.guard'
+import { RequirePlanModule, CheckPlanLimit } from '../auth/plan.decorator'
 import { TenantId } from '../../common/decorators/tenant.decorator'
+import { CreateInvoiceDto, UpdateInvoiceStatusDto, CancelInvoiceDto } from './invoices.dto'
 
 @Controller('invoices')
-@UseGuards(AuthGuard, PermissionsGuard)
+@UseGuards(AuthGuard, PermissionsGuard, PlanGuard)
+@RequirePlanModule('billing')
 export class InvoicesController {
   constructor(private readonly invoicesService: InvoicesService) {}
 
@@ -42,19 +46,10 @@ export class InvoicesController {
 
   @Post()
   @Permissions('manage_billing')
+  @CheckPlanLimit('maxInvoicesPerMonth')
   create(
     @TenantId() tenantId: string,
-    @Body() data: {
-      clientId: string
-      paymentTermDays: number
-      notes?: string
-      items: {
-        productId: string
-        quantity: number
-        unitPrice: number
-        taxRate: number
-      }[]
-    },
+    @Body() data: CreateInvoiceDto,
   ) {
     return this.invoicesService.create(tenantId, data)
   }
@@ -64,9 +59,9 @@ export class InvoicesController {
   updateStatus(
     @TenantId() tenantId: string,
     @Param('id') id: string,
-    @Body() body: { status: string },
+    @Body() body: UpdateInvoiceStatusDto,
   ) {
-    return this.invoicesService.updateStatus(tenantId, id, body.status as any)
+    return this.invoicesService.updateStatus(tenantId, id, body.status)
   }
 
   @Delete(':id')
@@ -80,7 +75,7 @@ export class InvoicesController {
   cancel(
     @TenantId() tenantId: string,
     @Param('id') id: string,
-    @Body() body: { reason?: string },
+    @Body() body: CancelInvoiceDto,
   ) {
     return this.invoicesService.cancel(tenantId, id, body.reason)
   }

@@ -1,4 +1,6 @@
-import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common'
+﻿import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common'
+import { Throttle } from '@nestjs/throttler'
+import { IsString, MaxLength, MinLength } from 'class-validator'
 import type { CookieOptions, Response } from 'express'
 import { AUTH_COOKIE_NAME, AUTH_REFRESH_COOKIE_NAME, isOAuthProvider } from './auth.constants'
 import { AuthGuard } from './auth.guard'
@@ -7,6 +9,13 @@ import { TotpService } from './totp.service'
 import { ChangePasswordDto, ForgotPasswordDto, LoginRequestDto, RefreshTokenDto, ResetPasswordDto, UpdateProfileDto } from './auth.types'
 import type { AuthenticatedRequest } from './auth.types'
 import { getDefaultFrontendCallbackUrl } from './oauth.providers'
+
+class TotpCodeDto {
+  @IsString()
+  @MinLength(1)
+  @MaxLength(10)
+  code!: string
+}
 
 function resolveRequestContext(request?: Partial<AuthenticatedRequest>) {
   const forwardedFor = request?.headers?.['x-forwarded-for']
@@ -131,6 +140,7 @@ export class AuthController {
     private readonly totpService: TotpService,
   ) {}
 
+  @Throttle({ short: { ttl: 60000, limit: 5 } })
   @Post('login')
   async login(
     @Body() body: LoginRequestDto,
@@ -144,16 +154,19 @@ export class AuthController {
     return result
   }
 
+  @Throttle({ short: { ttl: 60000, limit: 3 } })
   @Post('forgot-password')
   async forgotPassword(@Body() body: ForgotPasswordDto) {
     return this.authService.forgotPassword(body.email)
   }
 
+  @Throttle({ short: { ttl: 60000, limit: 3 } })
   @Post('reset-password')
   async resetPassword(@Body() body: ResetPasswordDto) {
     return this.authService.resetPassword(body.token, body.newPassword)
   }
 
+  @Throttle({ short: { ttl: 60000, limit: 10 } })
   @Post('refresh')
   async refresh(
     @Body() body: RefreshTokenDto,
@@ -253,7 +266,7 @@ export class AuthController {
 
   @UseGuards(AuthGuard)
   @Post('totp/confirm')
-  async totpConfirm(@Req() request: AuthenticatedRequest, @Body() body: { code: string }) {
+  async totpConfirm(@Req() request: AuthenticatedRequest, @Body() body: TotpCodeDto) {
     if (!request.authUser) throw new UnauthorizedException('Token de acceso requerido.')
     await this.totpService.confirmTotp(request.authUser.sub, body.code)
     return { ok: true, message: '2FA activado correctamente.' }
@@ -261,7 +274,7 @@ export class AuthController {
 
   @UseGuards(AuthGuard)
   @Post('totp/disable')
-  async totpDisable(@Req() request: AuthenticatedRequest, @Body() body: { code: string }) {
+  async totpDisable(@Req() request: AuthenticatedRequest, @Body() body: TotpCodeDto) {
     if (!request.authUser) throw new UnauthorizedException('Token de acceso requerido.')
     await this.totpService.disableTotp(request.authUser.sub, body.code)
     return { ok: true, message: '2FA desactivado.' }
@@ -300,5 +313,25 @@ export class AuthController {
       ok: true,
       message: 'Sesion cerrada.',
     }
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('accept-privacy')
+  async acceptPrivacy(@Req() request: AuthenticatedRequest, @Body() body: { version: string }) {
+    if (!request.authUser) throw new UnauthorizedException('Token de acceso requerido.')
+    return this.authService.acceptPrivacyPolicy(request.authUser.sub, body.version || 'v1.0')
+  }
+
+  @Throttle({ short: { ttl: 60000, limit: 3 } })
+  @Post('verify-email')
+  async verifyEmail(@Body() body: { token: string }) {
+    return this.authService.verifyEmail(body.token)
+  }
+
+  @UseGuards(AuthGuard)
+  @Post('resend-verification')
+  async resendVerification(@Req() request: AuthenticatedRequest) {
+    if (!request.authUser) throw new UnauthorizedException('Token de acceso requerido.')
+    return this.authService.resendVerificationEmail(request.authUser.sub)
   }
 }

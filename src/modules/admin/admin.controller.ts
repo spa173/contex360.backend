@@ -3,6 +3,7 @@ import { AuthGuard } from '../auth/auth.guard'
 import { AdminGuard } from '../auth/admin.guard'
 import { AdminService } from './admin.service'
 import type { AuthenticatedRequest } from '../auth/auth.types'
+import { UpdateTenantDto, UpdateSubscriptionDto, CreateCompanyDto, UpdateTenantStatusDto, DeleteTenantDto } from './admin.dto'
 
 @Controller('admin')
 @UseGuards(AuthGuard, AdminGuard)
@@ -75,7 +76,7 @@ export class AdminController {
   @Patch('tenants/:id')
   updateTenant(
     @Param('id') id: string,
-    @Body() body: { name?: string; nit?: string; sector?: string; city?: string; costMethod?: string; allowNegativeStock?: boolean; smtpHost?: string; smtpPort?: number; smtpUser?: string; smtpPassword?: string; smtpFromEmail?: string; activeIntegrations?: string[]; adminSettings?: any },
+    @Body() body: UpdateTenantDto,
   ) {
     return this.adminService.updateTenant(id, body)
   }
@@ -83,31 +84,20 @@ export class AdminController {
   @Patch('tenants/:id/subscription')
   updateSubscription(
     @Param('id') id: string,
-    @Body() body: { planType?: string; active?: boolean; trialEndsAt?: string | null },
+    @Body() body: UpdateSubscriptionDto,
   ) {
     return this.adminService.updateSubscription(id, body)
   }
 
   @Post('companies')
-  createCompany(@Body() body: {
-    name: string
-    adminName: string
-    adminEmail: string
-    prefix?: string
-    plan?: string
-    city?: string
-    nit?: string
-    address?: string
-    phone?: string
-    sector?: string
-  }) {
+  createCompany(@Body() body: CreateCompanyDto) {
     return this.adminService.createCompany(body)
   }
 
   @Patch('tenants/:id/status')
   updateTenantStatus(
     @Param('id') id: string,
-    @Body() body: { status: 'active' | 'suspended' },
+    @Body() body: UpdateTenantStatusDto,
   ) {
     return this.adminService.updateTenantStatus(id, body.status)
   }
@@ -115,7 +105,7 @@ export class AdminController {
   @Post('tenants/:id/delete')
   deleteTenant(
     @Param('id') id: string,
-    @Body() body: { password?: string },
+    @Body() body: DeleteTenantDto,
     @Req() request: AuthenticatedRequest
   ) {
     if (!request.authUser) {

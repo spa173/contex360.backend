@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { PLANS } from './plans.config';
 
@@ -13,6 +13,8 @@ function toLimitSnapshot(planKey: 'starter' | 'pyme' | 'enterprise') {
 
 @Injectable()
 export class SubscriptionsService {
+  private readonly logger = new Logger(SubscriptionsService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async getCurrentSubscription(tenantId: string) {
@@ -24,10 +26,12 @@ export class SubscriptionsService {
       return {
         planType: 'starter',
         active: true,
+        billing: 'monthly',
         trialDaysRemaining: 0,
         invoicesThisMonth: 0,
         trialEndsAt: null,
         renewsAt: null,
+        cancelAt: null,
         limits: PLANS.starter,
       };
     }
@@ -48,9 +52,11 @@ export class SubscriptionsService {
     return {
       planType: subscription.planType,
       active: subscription.active,
+      billing: subscription.billing,
       trialDaysRemaining,
       trialEndsAt: subscription.trialEndsAt ? subscription.trialEndsAt.toISOString() : null,
       renewsAt: subscription.renewsAt ? subscription.renewsAt.toISOString() : null,
+      cancelAt: subscription.cancelAt ? subscription.cancelAt.toISOString() : null,
       invoicesThisMonth: subscription.invoicesThisMonth,
       limits,
     };
@@ -97,6 +103,7 @@ export class SubscriptionsService {
       create: {
         tenantId,
         planType,
+        billing,
         active: true,
         trialEndsAt: null,
         renewsAt,
@@ -105,18 +112,156 @@ export class SubscriptionsService {
       update: {
         active: true,
         planType,
+        billing,
         trialEndsAt: null,
         renewsAt,
+        cancelAt: null,
       },
-    })
+    });
   }
 
   async cancelSubscription(tenantId: string) {
-    return this.prisma.subscription.updateMany({
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { tenantId },
+    });
+
+    if (!subscription) {
+      throw new Error('No hay suscripción activa para cancelar.');
+    }
+
+    // Programar cancelación al final del ciclo actual
+    const cancelAt = subscription.renewsAt || new Date();
+
+    return this.prisma.subscription.update({
+      where: { tenantId },
+      data: {
+        cancelAt,
+      },
+    });
+  }
+
+  async confirmCancellation(tenantId: string) {
+    return this.prisma.subscription.update({
       where: { tenantId },
       data: {
         active: false,
+        cancelAt: null,
       },
-    })
+    });
+  }
+
+  async createPayment(data: {
+    tenantId: string;
+    subscriptionId?: string;
+    wompiTransactionId?: string;
+    amount: number;
+    currency?: string;
+    status: string;
+    paymentMethod?: string;
+    planType?: string;
+    billing?: string;
+    description?: string;
+    paidAt?: Date;
+  }) {
+    return this.prisma.payment.create({
+      data: {
+        tenantId: data.tenantId,
+        subscriptionId: data.subscriptionId,
+        wompiTransactionId: data.wompiTransactionId,
+        amount: data.amount,
+        currency: data.currency || 'COP',
+        status: data.status,
+        paymentMethod: data.paymentMethod,
+        planType: data.planType,
+        billing: data.billing,
+        description: data.description,
+        paidAt: data.paidAt,
+      },
+    });
+  }
+
+  async createSubscriptionInvoice(data: {
+    tenantId: string;
+    subscriptionId: string;
+    paymentId?: string;
+    amount: number;
+    tax: number;
+    total: number;
+    planType: string;
+    billing: string;
+    periodStart: Date;
+    periodEnd: Date;
+    paidAt?: Date;
+  }) {
+    const invoiceNumber = await this.generateInvoiceNumber(data.tenantId);
+
+    return this.prisma.subscriptionInvoice.create({
+      data: {
+        tenantId: data.tenantId,
+        subscriptionId: data.subscriptionId,
+        paymentId: data.paymentId,
+        invoiceNumber,
+        amount: data.amount,
+        tax: data.tax,
+        total: data.total,
+        status: data.paidAt ? 'paid' : 'pending',
+        planType: data.planType,
+        billing: data.billing,
+        periodStart: data.periodStart,
+        periodEnd: data.periodEnd,
+        paidAt: data.paidAt,
+      },
+    });
+  }
+
+  async getPaymentHistory(tenantId: string, limit = 20) {
+    return this.prisma.payment.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
+
+  async getInvoiceHistory(tenantId: string, limit = 20) {
+    return this.prisma.subscriptionInvoice.findMany({
+      where: { tenantId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
+
+  async getPaymentById(paymentId: string) {
+    return this.prisma.payment.findUnique({
+      where: { id: paymentId },
+    });
+  }
+
+  async linkPaymentToInvoice(paymentId: string, invoiceId: string) {
+    return this.prisma.subscriptionInvoice.update({
+      where: { id: invoiceId },
+      data: {
+        paymentId,
+        status: 'paid',
+        paidAt: new Date(),
+      },
+    });
+  }
+
+  private async generateInvoiceNumber(tenantId: string): Promise<string> {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+
+    const count = await this.prisma.subscriptionInvoice.count({
+      where: {
+        tenantId,
+        createdAt: {
+          gte: new Date(year, now.getMonth(), 1),
+          lt: new Date(year, now.getMonth() + 1, 1),
+        },
+      },
+    });
+
+    return `SUB-${year}${month}-${String(count + 1).padStart(4, '0')}`;
   }
 }

@@ -1,22 +1,13 @@
 import { Body, Controller, Post, Get, Put, Param } from '@nestjs/common';
 import { DemoService } from './demo.service';
+import { CreateDemoRequestDto } from './demo.dto';
 
 @Controller('demo')
 export class DemoController {
   constructor(private readonly demoService: DemoService) {}
 
   @Post()
-  async createDemoRequest(@Body() body: {
-    nombre: string;
-    empresa: string;
-    correo: string;
-    telefono?: string;
-    mensaje?: string;
-    nit?: string;
-    ciudad?: string;
-    direccion?: string;
-    sector?: string;
-  }) {
+  async createDemoRequest(@Body() body: CreateDemoRequestDto) {
     return this.demoService.createDemoRequest(body);
   }
 

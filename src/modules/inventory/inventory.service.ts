@@ -32,6 +32,14 @@ export class InventoryService {
       const product = await tx.product.findUnique({ where: { id: data.productId } })
       if (!product) throw new NotFoundException('Producto no encontrado')
 
+      const tenant = await tx.tenant.findUnique({ where: { id: tenantId }, select: { allowNegativeStock: true } })
+
+      if (data.type === 'salida' && !tenant?.allowNegativeStock && product.stock < data.quantity) {
+        throw new BadRequestException(
+          `Stock insuficiente para ${product.name}. Disponible: ${product.stock}, Requerido: ${data.quantity}`
+        )
+      }
+
       // Update Stock
       await tx.product.update({
         where: { id: data.productId },

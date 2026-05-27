@@ -7,6 +7,7 @@ import { Permissions } from '../auth/permissions.decorator'
 import { TenantId } from '../../common/decorators/tenant.decorator'
 import { AuthenticatedRequest } from '../auth/auth.types'
 import { Public } from '../auth/public.decorator'
+import { SendEmailDto } from './gmail.dto'
 
 @Controller('integrations/gmail')
 export class GmailController {
@@ -25,7 +26,6 @@ export class GmailController {
   async callback(@Query('code') code: string, @Query('state') state: string, @Res() res: Response) {
     try {
       const { email, frontendUrl } = await this.gmailService.handleCallback(code, state)
-      // Close the popup and notify the parent window
       return res.send(`
         <!DOCTYPE html><html><head><title>Gmail conectado</title></head>
         <body>
@@ -75,7 +75,7 @@ export class GmailController {
   @Permissions('view_billing')
   send(
     @TenantId() tenantId: string,
-    @Body() body: { to: string; subject: string; html: string },
+    @Body() body: SendEmailDto,
   ) {
     return this.gmailService.sendEmail(tenantId, body.to, body.subject, body.html)
   }

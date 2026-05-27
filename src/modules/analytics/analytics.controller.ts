@@ -64,7 +64,7 @@ export class AnalyticsController {
     @TenantId() tenantId: string,
     @Query('limit') limit?: string,
   ) {
-    return this.analyticsService.getTopProducts(tenantId, parseInt(limit || '10'))
+    return this.analyticsService.getTopProducts(tenantId, Number.parseInt(limit || '10', 10))
   }
 
   @Get('ocr-runs')

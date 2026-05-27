@@ -1,9 +1,10 @@
 import { Controller, Get, Patch, Post, Body, Param, UseGuards } from '@nestjs/common'
-import { LedgerService, CreateLedgerEntryDto } from './ledger.service'
+import { LedgerService } from './ledger.service'
 import { AuthGuard } from '../auth/auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import { Permissions } from '../auth/permissions.decorator'
 import { TenantId } from '../../common/decorators/tenant.decorator'
+import { CreateLedgerEntryDto } from './ledger.dto'
 
 @Controller('ledger')
 @UseGuards(AuthGuard, PermissionsGuard)
