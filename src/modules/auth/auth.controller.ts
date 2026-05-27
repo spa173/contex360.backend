@@ -1,4 +1,4 @@
-﻿import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common'
+import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common'
 import { Throttle } from '@nestjs/throttler'
 import { IsString, MaxLength, MinLength } from 'class-validator'
 import type { CookieOptions, Response } from 'express'
@@ -140,7 +140,7 @@ export class AuthController {
     private readonly totpService: TotpService,
   ) {}
 
-  @Throttle({ short: { ttl: 60000, limit: 5 } })
+  @Throttle({ short: { ttl: 60000, limit: 30 } })
   @Post('login')
   async login(
     @Body() body: LoginRequestDto,
