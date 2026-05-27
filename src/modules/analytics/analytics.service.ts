@@ -65,9 +65,13 @@ export class AnalyticsService {
       orderBy: { issuedAt: 'desc' },
     })
 
+    const esc = (v: unknown) => {
+      const s = String(v ?? '')
+      return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s
+    }
     const header = 'ID,Fecha,Cliente,Total,Estado\n'
     const rows = invoices.map(inv => 
-      `${inv.id},${inv.issuedAt.toISOString()},${inv.client?.name || 'N/A'},${inv.total},${inv.status}`
+      [inv.id, inv.issuedAt.toISOString(), inv.client?.name || 'N/A', inv.total, inv.status].map(esc).join(',')
     ).join('\n')
 
     return header + rows
@@ -163,6 +167,8 @@ export class AnalyticsService {
   }
 
   async getAggregates(tenantId: string, model: string, operation: '_sum' | '_avg' | '_count', field?: string, where: any = {}) {
+    const ALLOWED_MODELS = ['invoice', 'product', 'purchase', 'transaction', 'thirdParty', 'user', 'membership', 'subscription', 'auditEvent', 'inventoryMovement', 'ledgerEntry', 'ocrRun']
+    if (!ALLOWED_MODELS.includes(model)) throw new Error(`Model ${model} not found`)
     const prismaModel = (this.prisma as any)[model]
     if (!prismaModel) throw new Error(`Model ${model} not found`)
 

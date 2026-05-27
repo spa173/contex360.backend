@@ -1,19 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common'
 import { PrismaService } from '../database/prisma.service'
-
-export interface CreateLedgerEntryDto {
-  referenceType: string
-  referenceId?: string
-  description: string
-  amount: number
-  entryAt?: string
-  lines: {
-    account: string
-    label: string
-    debit: number
-    credit: number
-  }[]
-}
+import { CreateLedgerEntryDto } from './ledger.dto'
 
 @Injectable()
 export class LedgerService {

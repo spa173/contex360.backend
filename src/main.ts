@@ -9,6 +9,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter'
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor'
 
 import { json, urlencoded } from 'express'
+import helmet from 'helmet'
 
 import { validateEnv } from './common/env-validator'
 
@@ -52,33 +53,58 @@ export async function bootstrap() {
     optionsSuccessStatus: 204,
   })
 
+  // Security headers via Helmet
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+        imgSrc: ["'self'", "data:", "blob:"],
+        connectSrc: ["'self'", "https://*.hf.space", "https://huggingface.co"],
+        frameAncestors: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+      },
+    },
+    hsts: { maxAge: 63072000, includeSubDomains: true, preload: true },
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
+    crossOriginEmbedderPolicy: false,
+  }))
+
   const appName = configService.get<string>('APP_NAME') ?? 'Contex360 Backend'
   const port = Number(configService.get<string>('PORT') ?? 3001)
   const swaggerPath = configService.get<string>('SWAGGER_PATH') ?? 'docs'
+  const isProduction = process.env.NODE_ENV === 'production'
 
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
+      forbidNonWhitelisted: true,
       transform: true,
-      forbidUnknownValues: false,
+      forbidUnknownValues: true,
     }),
   )
 
   app.useGlobalFilters(new AllExceptionsFilter())
   app.useGlobalInterceptors(new LoggingInterceptor())
 
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle(appName)
-    .setDescription('API base para Contex360')
-    .setVersion('0.1.0')
-    .addBearerAuth()
-    .build()
+  // Swagger solo en desarrollo — deshabilitado en producción por seguridad
+  if (!isProduction) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle(appName)
+      .setDescription('API base para Contex360')
+      .setVersion('0.1.0')
+      .addBearerAuth()
+      .build()
 
-  try {
-    const document = SwaggerModule.createDocument(app, swaggerConfig)
-    SwaggerModule.setup(swaggerPath, app, document)
-  } catch (error: any) {
-    logger.warn(`Failed to generate Swagger documentation: ${String(error.message || error).replace(/[\r\n]+/g, ' ')}`)
+    try {
+      const document = SwaggerModule.createDocument(app, swaggerConfig)
+      SwaggerModule.setup(swaggerPath, app, document)
+    } catch (error: any) {
+      logger.warn(`Failed to generate Swagger documentation: ${String(error.message || error).replace(/[\r\n]+/g, ' ')}`)
+    }
   }
 
   // Solo hacemos listen si NO estamos en entorno de Vite (donde Vite maneja el servidor)

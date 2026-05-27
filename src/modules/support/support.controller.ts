@@ -6,6 +6,7 @@ import { Permissions } from '../auth/permissions.decorator'
 import { TenantId } from '../../common/decorators/tenant.decorator'
 import { AuthenticatedRequest } from '../auth/auth.types'
 import { Req } from '@nestjs/common'
+import { CreateTicketDto } from './support.dto'
 
 @Controller('support')
 @UseGuards(AuthGuard, PermissionsGuard)
@@ -15,11 +16,7 @@ export class SupportController {
   @Post('tickets')
   @Permissions('view_dashboard')
   createTicket(
-    @Body() body: {
-      subject: string
-      description: string
-      priority?: 'baja' | 'media' | 'alta' | 'critica'
-    },
+    @Body() body: CreateTicketDto,
     @TenantId() tenantId: string,
     @Req() req: AuthenticatedRequest,
   ) {

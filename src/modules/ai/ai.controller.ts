@@ -6,6 +6,7 @@ import { Public } from '../auth/public.decorator'
 import { TenantId } from '../../common/decorators/tenant.decorator'
 import { AuthUser } from '../../common/decorators/auth-user.decorator'
 import { AuthTokenPayload } from '../auth/auth.types'
+import { ChatDto } from './ai.dto'
 
 @Controller('ai')
 @UseGuards(AuthGuard, PermissionsGuard)
@@ -16,12 +17,10 @@ export class AiController {
   chat(
     @TenantId() tenantId: string, 
     @AuthUser() user: AuthTokenPayload,
-    @Body('message') message: string,
-    @Body('history') history: any[],
-    @Body('attachment') attachment?: string
+    @Body() body: ChatDto,
   ) {
     const userName = user.email ? user.email.split('@')[0] : 'Usuario'
-    return this.aiService.processChat(tenantId, userName, user.isSystemOwner, message, history, attachment)
+    return this.aiService.processChat(tenantId, userName, user.isSystemOwner, body.message, body.history || [], body.attachment)
   }
 
   @Post('translate')

@@ -1,7 +1,7 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common'
-import { APP_INTERCEPTOR } from '@nestjs/core'
+import { APP_INTERCEPTOR, APP_GUARD } from '@nestjs/core'
 import { ConfigModule } from '@nestjs/config'
-import { ThrottlerModule } from '@nestjs/throttler'
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler'
 import { ScheduleModule } from '@nestjs/schedule'
 import { AppController } from './app.controller'
 import { AppService } from './app.service'
@@ -28,6 +28,7 @@ import { IntegrationsModule } from './modules/integrations/integrations.module'
 import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module'
 import { HelpCenterModule } from './modules/help-center/help-center.module'
 import { CsrfMiddleware } from './common/middleware/csrf.middleware'
+import { CryptoModule } from './common/crypto/crypto.module'
 import { UsersModule } from './modules/users/users.module';
 
 @Module({
@@ -64,13 +65,13 @@ import { UsersModule } from './modules/users/users.module';
     SubscriptionsModule,
     HelpCenterModule,
     UsersModule,
+    CryptoModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
     { provide: APP_INTERCEPTOR, useClass: RlsContextInterceptor },
-    // Comentado temporalmente el guard global para descartar bloqueos de CORS por Throttling
-    // { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule implements NestModule {

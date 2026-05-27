@@ -4,7 +4,8 @@ import { Permissions } from '../auth/permissions.decorator'
 import { AuthGuard } from '../auth/auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import { TenantId } from '../../common/decorators/tenant.decorator'
-import { ThirdPartyKind, TaxRegime } from '@prisma/client'
+import { ThirdPartyKind } from '@prisma/client'
+import { CreateThirdPartyDto, UpdateThirdPartyDto } from './third-parties.dto'
 
 @Controller('third-parties')
 @UseGuards(AuthGuard, PermissionsGuard)
@@ -27,18 +28,7 @@ export class ThirdPartiesController {
   @Permissions('manage_third_parties')
   create(
     @TenantId() tenantId: string,
-    @Body() data: {
-      name: string
-      nit: string
-      email: string
-      phone?: string
-      address?: string
-      city?: string
-      kind: ThirdPartyKind
-      taxProfile: string
-      taxRegime?: TaxRegime
-      fiscalResponsibilities?: string[]
-    },
+    @Body() data: CreateThirdPartyDto,
   ) {
     return this.thirdPartiesService.create(tenantId, data)
   }
@@ -48,19 +38,7 @@ export class ThirdPartiesController {
   update(
     @TenantId() tenantId: string,
     @Param('id') id: string,
-    @Body() data: Partial<{
-      name: string
-      nit: string
-      email: string
-      phone: string
-      address: string
-      city: string
-      kind: ThirdPartyKind
-      taxProfile: string
-      taxRegime: TaxRegime
-      fiscalResponsibilities: string[]
-      isActive: boolean
-    }>,
+    @Body() data: UpdateThirdPartyDto,
   ) {
     return this.thirdPartiesService.update(tenantId, id, data)
   }

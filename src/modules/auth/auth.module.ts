@@ -8,6 +8,7 @@ import { AuthGuard } from './auth.guard'
 import { AuthService } from './auth.service'
 import { TotpService } from './totp.service'
 import { PermissionsGuard } from './permissions.guard'
+import { PlanGuard } from './plan.guard'
 
 @Global()
 @Module({
@@ -17,7 +18,7 @@ import { PermissionsGuard } from './permissions.guard'
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET') ?? 'change-me-in-development',
+        secret: configService.get<string>('JWT_SECRET'),
         signOptions: {
           expiresIn: (configService.get<string>('JWT_EXPIRES_IN') ?? '8h') as SignOptions['expiresIn'],
         },
@@ -25,7 +26,7 @@ import { PermissionsGuard } from './permissions.guard'
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, AuthGuard, TotpService, PermissionsGuard],
-  exports: [AuthService, JwtModule, AuthGuard, TotpService, PermissionsGuard],
+  providers: [AuthService, AuthGuard, TotpService, PermissionsGuard, PlanGuard],
+  exports: [AuthService, JwtModule, AuthGuard, TotpService, PermissionsGuard, PlanGuard],
 })
 export class AuthModule {}

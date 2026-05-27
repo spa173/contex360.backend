@@ -16,6 +16,7 @@ import {
   RefreshTokenDto,
   TotpRequiredResponse,
   PasswordExpiredResponse,
+  PrivacyConsentRequiredResponse,
   ChangePasswordDto,
   UpdateProfileDto,
   PublicSubscriptionSnapshot,
@@ -85,7 +86,7 @@ export class AuthService {
     private readonly notificationService: NotificationService,
   ) {}
 
-  async login(credentials: LoginRequestDto, context: AuthRequestContext): Promise<AuthResponseSnapshot | TotpRequiredResponse | PasswordExpiredResponse> {
+  async login(credentials: LoginRequestDto, context: AuthRequestContext): Promise<AuthResponseSnapshot | TotpRequiredResponse | PasswordExpiredResponse | PrivacyConsentRequiredResponse> {
     const email = normalizeEmail(credentials.email)
     const password = String(credentials.password || '')
 
@@ -163,7 +164,7 @@ export class AuthService {
 
     const profile = await fetchOAuthProfile(provider, accessToken)
     const user = await this.resolveOAuthUser(profile)
-    const auth = await this.issueAuthResponse(user, context)
+    const auth = await this.issueAuthResponse(user, context) as AuthResponseSnapshot
 
     return {
       auth,
@@ -203,7 +204,7 @@ export class AuthService {
       data: { revokedAt: new Date() },
     })
 
-    return this.issueAuthResponse(stored.user, context)
+    return this.issueAuthResponse(stored.user, context) as Promise<AuthResponseSnapshot>
   }
 
   async verifyAuthToken(token: string, ignoreExpiration = false) {
@@ -301,7 +302,7 @@ export class AuthService {
     }
   }
 
-  private async issueAuthResponse(user: UserWithAuthRelations, context: AuthRequestContext): Promise<AuthResponseSnapshot> {
+  private async issueAuthResponse(user: UserWithAuthRelations, context: AuthRequestContext): Promise<AuthResponseSnapshot | PrivacyConsentRequiredResponse> {
     if (user.status !== UserStatus.active) {
       throw new ForbiddenException('Este usuario aun no esta habilitado por un administrador.')
     }
@@ -316,6 +317,15 @@ export class AuthService {
 
     const activeTenant = await this.resolveActiveTenant(user, activeTenantId)
     const session = await this.createSession(user, activeTenant?.id || null, context, now)
+
+    // Consentimiento explícito Ley 1581 — NO auto-aceptar
+    if (!user.privacyConsentAt) {
+      return {
+        ok: false,
+        requiresPrivacyConsent: true,
+        message: 'Debe aceptar la política de privacidad (Ley 1581 de 2012) para continuar.',
+      }
+    }
 
     const policyData: Prisma.UserUpdateInput = { lastLoginAt: now }
     if (!user.policyAcceptedAt) {
@@ -810,5 +820,109 @@ export class AuthService {
     } catch (e) {
       throw new UnauthorizedException('El enlace es inválido o ha expirado. Por favor solicita uno nuevo.')
     }
+  }
+
+  async acceptPrivacyPolicy(userId: string, version: string) {
+    const now = new Date()
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        privacyConsentAt: now,
+        privacyConsentVersion: version,
+        policyAcceptedAt: now,
+        policyVersion: 'v1.0 (Ley 1581)',
+      },
+    })
+    return { ok: true, message: 'Política de privacidad aceptada correctamente.' }
+  }
+
+  async generateEmailVerificationToken(userId: string): Promise<string> {
+    const token = randomBytes(32).toString('hex')
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        emailVerificationToken: token,
+        emailVerificationExpires: expires,
+      },
+    })
+
+    return token
+  }
+
+  async sendVerificationEmail(email: string, token: string) {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
+    const verifyUrl = `${frontendUrl}/verify-email?token=${token}`
+
+    try {
+      const nodemailer = await import('nodemailer')
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: Number(process.env.SMTP_PORT || 587),
+        secure: false,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      })
+
+      await transporter.sendMail({
+        from: process.env.SMTP_FROM || 'Contex360 <noreply@contex360.com>',
+        to: email,
+        subject: 'Verifica tu correo electrónico — Contex360',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px;">
+            <h2 style="color: #18181B; font-size: 20px;">Verifica tu correo electrónico</h2>
+            <p style="color: #71717A; font-size: 14px; line-height: 1.6;">
+              Haz clic en el botón de abajo para verificar tu dirección de correo y activar tu cuenta.
+            </p>
+            <a href="${verifyUrl}" style="display: inline-block; padding: 12px 24px; background: #2563EB; color: white; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 14px; margin: 16px 0;">
+              Verificar correo
+            </a>
+            <p style="color: #A1A1AA; font-size: 12px; margin-top: 24px;">
+              Este enlace expira en 24 horas. Si no solicitaste esta verificación, puedes ignorar este mensaje.
+            </p>
+          </div>
+        `,
+      })
+    } catch (error) {
+      console.log(`[DEV] Email verification link: ${verifyUrl}`)
+    }
+  }
+
+  async verifyEmail(token: string) {
+    const user = await this.prisma.user.findFirst({
+      where: {
+        emailVerificationToken: token,
+        emailVerificationExpires: { gt: new Date() },
+      },
+    })
+
+    if (!user) {
+      throw new UnauthorizedException('Token de verificación inválido o expirado.')
+    }
+
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerified: true,
+        emailVerificationToken: null,
+        emailVerificationExpires: null,
+      },
+    })
+
+    return { ok: true, message: 'Correo electrónico verificado correctamente.' }
+  }
+
+  async resendVerificationEmail(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } })
+    if (!user) throw new UnauthorizedException('Usuario no encontrado.')
+    if (user.emailVerified) return { ok: true, message: 'El correo ya está verificado.' }
+
+    const token = await this.generateEmailVerificationToken(userId)
+    await this.sendVerificationEmail(user.email, token)
+
+    return { ok: true, message: 'Correo de verificación enviado.' }
   }
 }

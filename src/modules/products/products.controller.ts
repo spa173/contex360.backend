@@ -4,6 +4,7 @@ import { AuthGuard } from '../auth/auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import { Permissions } from '../auth/permissions.decorator'
 import { TenantId } from '../../common/decorators/tenant.decorator'
+import { CreateProductDto } from './products.dto'
 
 @Controller('products')
 @UseGuards(AuthGuard, PermissionsGuard)
@@ -24,7 +25,7 @@ export class ProductsController {
 
   @Post()
   @Permissions('manage_inventory')
-  create(@Body() data: any, @TenantId() tenantId: string) {
+  create(@Body() data: CreateProductDto, @TenantId() tenantId: string) {
     return this.productsService.create(data, tenantId)
   }
 }

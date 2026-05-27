@@ -34,6 +34,12 @@ export interface PasswordExpiredResponse {
   message: string
 }
 
+export interface PrivacyConsentRequiredResponse {
+  ok: false
+  requiresPrivacyConsent: true
+  message: string
+}
+
 export class ChangePasswordDto {
   @Transform(({ value }) => String(value || '').trim())
   @IsString()

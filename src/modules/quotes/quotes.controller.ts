@@ -4,11 +4,14 @@ import { InvoicesService } from '../invoices/invoices.service'
 import { Permissions } from '../auth/permissions.decorator'
 import { AuthGuard } from '../auth/auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
+import { PlanGuard } from '../auth/plan.guard'
+import { RequirePlanModule } from '../auth/plan.decorator'
 import { TenantId } from '../../common/decorators/tenant.decorator'
-import { QuoteStatus } from '@prisma/client'
+import { CreateQuoteDto, UpdateQuoteStatusDto } from './quotes.dto'
 
 @Controller('quotes')
-@UseGuards(AuthGuard, PermissionsGuard)
+@UseGuards(AuthGuard, PermissionsGuard, PlanGuard)
+@RequirePlanModule('billing')
 export class QuotesController {
   constructor(
     private readonly quotesService: QuotesService,
@@ -31,19 +34,7 @@ export class QuotesController {
   @Permissions('manage_billing')
   create(
     @TenantId() tenantId: string,
-    @Body() data: {
-      clientId: string
-      validUntil?: string
-      notes?: string
-      terms?: string
-      items: {
-        productId: string
-        quantity: number
-        unitPrice: number
-        taxRate: number
-        notes?: string
-      }[]
-    },
+    @Body() data: CreateQuoteDto,
   ) {
     return this.quotesService.create(tenantId, {
       ...data,
@@ -56,7 +47,7 @@ export class QuotesController {
   updateStatus(
     @TenantId() tenantId: string,
     @Param('id') id: string,
-    @Body() body: { status: QuoteStatus },
+    @Body() body: UpdateQuoteStatusDto,
   ) {
     return this.quotesService.updateStatus(tenantId, id, body.status)
   }

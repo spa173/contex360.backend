@@ -5,7 +5,7 @@ import { AuthGuard } from '../auth/auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
 import { TenantId } from '../../common/decorators/tenant.decorator'
 import { AuthUser } from '../../common/decorators/auth-user.decorator'
-import { InventoryMovementType } from '@prisma/client'
+import { CreateMovementDto, TransferStockDto, AuditInventoryDto, ReceiveInventoryDto } from './inventory.dto'
 
 @Controller('inventory')
 @UseGuards(AuthGuard, PermissionsGuard)
@@ -22,16 +22,7 @@ export class InventoryController {
   @Permissions('manage_inventory')
   createMovement(
     @TenantId() tenantId: string,
-    @Body() data: {
-      productId: string
-      type: InventoryMovementType
-      quantity: number
-      reason: string
-      batch?: string
-      note?: string
-      referenceId?: string
-      attachmentUrl?: string
-    },
+    @Body() data: CreateMovementDto,
     @AuthUser('id') userId: string
   ) {
     return this.inventoryService.createMovement(tenantId, { ...data, userId })
@@ -49,7 +40,7 @@ export class InventoryController {
   @Permissions('manage_inventory')
   transferStock(
     @TenantId() tenantId: string,
-    @Body() payload: { productId: string, fromLocId: string, toLocId: string, quantity: number },
+    @Body() payload: TransferStockDto,
     @AuthUser('id') userId: string
   ) {
     return this.inventoryService.transferStock(tenantId, { ...payload, userId })
@@ -69,17 +60,17 @@ export class InventoryController {
   @Permissions('manage_inventory')
   auditInventory(
     @TenantId() tenantId: string,
-    @Body('adjustments') adjustments: any[],
+    @Body() body: AuditInventoryDto,
     @AuthUser('id') userId: string
   ) {
-    return this.inventoryService.auditInventory(tenantId, adjustments, userId)
+    return this.inventoryService.auditInventory(tenantId, body.adjustments, userId)
   }
 
   @Post('receive')
   @Permissions('manage_inventory')
   receiveInventory(
     @TenantId() tenantId: string,
-    @Body() payload: { productId: string, quantity: number, unitCost: number, locId: string },
+    @Body() payload: ReceiveInventoryDto,
     @AuthUser('id') userId: string
   ) {
     return this.inventoryService.receiveInventory(tenantId, { ...payload, userId })

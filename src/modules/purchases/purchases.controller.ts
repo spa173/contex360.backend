@@ -3,10 +3,14 @@ import { PurchasesService } from './purchases.service'
 import { Permissions } from '../auth/permissions.decorator'
 import { AuthGuard } from '../auth/auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
+import { PlanGuard } from '../auth/plan.guard'
+import { RequirePlanModule } from '../auth/plan.decorator'
 import { TenantId } from '../../common/decorators/tenant.decorator'
+import { CreatePurchaseDto, UpdatePurchaseStatusDto } from './purchases.dto'
 
 @Controller('purchases')
-@UseGuards(AuthGuard, PermissionsGuard)
+@UseGuards(AuthGuard, PermissionsGuard, PlanGuard)
+@RequirePlanModule('billing')
 export class PurchasesController {
   constructor(private readonly purchasesService: PurchasesService) {}
 
@@ -32,19 +36,7 @@ export class PurchasesController {
   @Permissions('manage_billing')
   create(
     @TenantId() tenantId: string,
-    @Body()
-    data: {
-      providerId: string
-      paymentTermDays: number
-      notes?: string
-      items: {
-        productId: string
-        productName: string
-        quantity: number
-        unitPrice: number
-        taxRate: number
-      }[]
-    },
+    @Body() data: CreatePurchaseDto,
   ) {
     return this.purchasesService.create(tenantId, data)
   }
@@ -54,7 +46,7 @@ export class PurchasesController {
   updateStatus(
     @TenantId() tenantId: string,
     @Param('id') id: string,
-    @Body() body: { status: string },
+    @Body() body: UpdatePurchaseStatusDto,
   ) {
     return this.purchasesService.updateStatus(tenantId, id, body.status as any)
   }
