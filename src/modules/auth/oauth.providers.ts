@@ -207,18 +207,23 @@ export async function fetchOAuthProfile(provider: OAuthProvider, accessToken: st
     },
   })
 
-  const email = String(profile.email || '').trim().toLowerCase()
-  const providerAccountId = String(profile.sub || profile.id || '').trim()
+  const emailVal = typeof profile.email === 'string' ? profile.email : ''
+  const email = emailVal.trim().toLowerCase()
+  const subVal = typeof profile.sub === 'string' ? profile.sub : typeof profile.id === 'string' ? profile.id : ''
+  const providerAccountId = subVal.trim()
 
   if (!providerAccountId || !email) {
     throw new Error('No fue posible obtener el perfil de Google.')
   }
 
+  const nameVal = typeof profile.name === 'string' ? profile.name : typeof profile.given_name === 'string' ? profile.given_name : email
+  const name = nameVal.trim() || email
+
   return {
     provider,
     providerAccountId,
     email,
-    name: String(profile.name || profile.given_name || email).trim() || email,
+    name,
     picture: typeof profile.picture === 'string' && profile.picture.trim() ? profile.picture : null,
     raw: profile,
   } satisfies OAuthProfileSnapshot
