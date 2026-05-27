@@ -20,7 +20,9 @@ export class BackupScheduler {
     this.logger.log('Iniciando backup diario de base de datos...')
 
     try {
-      execSync('npx ts-node scripts/backup-db.ts', {
+      const { join } = await import('node:path')
+      const tsNodeBin = join(process.cwd(), 'node_modules', 'ts-node', 'dist', 'bin.js')
+      execSync(`"${process.execPath}" "${tsNodeBin}" scripts/backup-db.ts`, {
         encoding: 'utf8',
         timeout: 300000, // 5 minutes
         cwd: process.cwd(),
