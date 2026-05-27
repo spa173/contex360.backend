@@ -20,6 +20,9 @@ export class LoginRequestDto {
 
   @IsOptional()
   rememberMe?: boolean
+
+  @IsOptional()
+  privacyAccepted?: boolean
 }
 
 export interface TotpRequiredResponse {

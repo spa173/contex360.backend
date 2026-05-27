@@ -838,8 +838,13 @@ ${JSON.stringify(texts, null, 2)}`
         max_tokens: 2048,
       })
       const response = completion.choices[0]?.message?.content ?? '{}'
-      const jsonMatch = response.match(/\{[\s\S]*?\}/)
-      return JSON.parse(jsonMatch ? jsonMatch[0] : response)
+      const firstBrace = response.indexOf('{')
+      const lastBrace = response.lastIndexOf('}')
+      let jsonContent = response
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        jsonContent = response.slice(firstBrace, lastBrace + 1)
+      }
+      return JSON.parse(jsonContent)
     } catch (error: any) {
       console.error('Translation Error:', safeLogFragment(error.message || error))
       throw new Error(`Failed to translate: ${safeLogFragment(error.message || error)}`)

@@ -137,6 +137,22 @@ export class AuthService {
       return { ok: false, requiresPasswordChange: true, message: 'Tu contrasena ha expirado. Debes establecer una nueva para continuar.' }
     }
 
+    if (credentials.privacyAccepted) {
+      const now = new Date()
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          privacyConsentAt: now,
+          privacyConsentVersion: 'v1.0 (Ley 1581)',
+          policyAcceptedAt: now,
+          policyVersion: 'v1.0 (Ley 1581)',
+        },
+      })
+      user.privacyConsentAt = now
+      user.policyAcceptedAt = now
+      user.policyVersion = 'v1.0 (Ley 1581)'
+    }
+
     return this.issueAuthResponse(user, context)
   }
 
