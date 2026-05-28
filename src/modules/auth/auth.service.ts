@@ -18,6 +18,7 @@ import {
   PasswordExpiredResponse,
   PrivacyConsentRequiredResponse,
   ChangePasswordDto,
+  ChangeExpiredPasswordDto,
   UpdateProfileDto,
   PublicSubscriptionSnapshot,
 } from './auth.types'
@@ -135,9 +136,14 @@ export class AuthService {
     const passwordExpired = this.isPasswordExpired(user.securityProfile)
     const resetRequired = user.securityProfile?.passwordResetRequired === true
     if (passwordExpired || resetRequired) {
+      const resetToken = await this.jwtService.signAsync(
+        { sub: user.id, action: 'force_password_change' },
+        { expiresIn: '15m' }
+      )
       return {
         ok: false,
         requiresPasswordChange: true,
+        resetToken,
         message: resetRequired
           ? 'Es obligatorio cambiar tu contraseña por solicitud del administrador o primer inicio de sesión.'
           : 'Tu contrasena ha expirado. Debes establecer una nueva para continuar.',
@@ -745,6 +751,22 @@ export class AuthService {
     })
 
     return { ok: true, message: 'Contrasena actualizada correctamente.' }
+  }
+
+  async changeExpiredPassword(dto: ChangeExpiredPasswordDto): Promise<{ ok: boolean; message: string }> {
+    try {
+      const payload = await this.jwtService.verifyAsync<{ sub: string; action: string }>(dto.resetToken)
+      if (payload.action !== 'force_password_change') {
+        throw new UnauthorizedException('Acción del token inválida.')
+      }
+      return this.changePassword(payload.sub, {
+        currentPassword: dto.currentPassword,
+        newPassword: dto.newPassword,
+      })
+    } catch (error) {
+      if (error instanceof UnauthorizedException) throw error
+      throw new UnauthorizedException('Token de restablecimiento inválido o expirado.')
+    }
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<PublicUserSnapshot> {

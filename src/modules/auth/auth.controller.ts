@@ -8,7 +8,7 @@ import { AUTH_COOKIE_NAME, AUTH_REFRESH_COOKIE_NAME, isOAuthProvider } from './a
 import { AuthGuard } from './auth.guard'
 import { AuthService } from './auth.service'
 import { TotpService } from './totp.service'
-import { ChangePasswordDto, ForgotPasswordDto, LoginRequestDto, RefreshTokenDto, ResetPasswordDto, UpdateProfileDto } from './auth.types'
+import { ChangeExpiredPasswordDto, ChangePasswordDto, ForgotPasswordDto, LoginRequestDto, RefreshTokenDto, ResetPasswordDto, UpdateProfileDto } from './auth.types'
 import type { AuthenticatedRequest } from './auth.types'
 import { getDefaultFrontendCallbackUrl } from './oauth.providers'
 
@@ -292,6 +292,11 @@ export class AuthController {
   async changePassword(@Req() request: AuthenticatedRequest, @Body() body: ChangePasswordDto) {
     if (!request.authUser) throw new UnauthorizedException('Token de acceso requerido.')
     return this.authService.changePassword(request.authUser.sub, body)
+  }
+
+  @Post('change-expired-password')
+  async changeExpiredPassword(@Body() body: ChangeExpiredPasswordDto) {
+    return this.authService.changeExpiredPassword(body)
   }
 
   @UseGuards(AuthGuard)
