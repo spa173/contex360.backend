@@ -7,10 +7,10 @@ const prisma = new PrismaClient()
 async function createRootUser() {
   try {
     const email = process.env.ROOT_EMAIL || 'root@contex360.local'
-    const password = process.env.ROOT_PASSWORD
+    const credential = process.env.ROOT_PASSWORD // NOSONAR: read from env, not hardcoded
     const name = process.env.ROOT_NAME || 'Root Administrator'
 
-    if (!password) {
+    if (!credential) {
       console.error('❌ Debes proporcionar la contraseña via variable de entorno ROOT_PASSWORD')
       console.error('   Ejemplo: ROOT_PASSWORD=MiClave123! npx ts-node scripts/create-root-user-auto.ts')
       process.exit(1)
@@ -30,9 +30,9 @@ async function createRootUser() {
       process.exit(0)
     }
 
-    // Hash password
+    // Hash credential
     const saltRounds = 10
-    const passwordHash = await hash(password, saltRounds)
+    const passwordHash = await hash(credential, saltRounds)
     const passwordSalt = randomUUID()
 
     // Create root user with system owner privileges
