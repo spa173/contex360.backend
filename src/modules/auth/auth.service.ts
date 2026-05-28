@@ -273,7 +273,7 @@ export class AuthService {
       ? await this.getSubscriptionSnapshot(activeTenant.id)
       : undefined
 
-    const isOnboardingCompleted = activeTenant ? !!activeTenant.onboardingCompletedAt : false
+    const isOnboardingCompleted = user.isSystemOwner ? true : (activeTenant ? !!activeTenant.onboardingCompletedAt : false)
 
     return {
       ok: true,
@@ -410,7 +410,7 @@ export class AuthService {
       ? await this.getSubscriptionSnapshot(activeTenant.id)
       : undefined
 
-    const isOnboardingCompleted = activeTenant ? !!activeTenant.onboardingCompletedAt : false
+    const isOnboardingCompleted = user.isSystemOwner ? true : (activeTenant ? !!activeTenant.onboardingCompletedAt : false)
 
     return {
       ok: true,
