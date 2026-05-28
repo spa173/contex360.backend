@@ -6,6 +6,7 @@ import { NestFactory } from '@nestjs/core'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { AppModule } from './app.module'
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter'
+import { LoggerService } from './common/logger/logger.service'
 
 import { json, urlencoded } from 'express'
 import helmet from 'helmet'
@@ -30,7 +31,7 @@ export async function bootstrap() {
     bufferLogs: true,
   })
   appInstance = app
-  app.useLogger(app.get(Logger))
+  app.useLogger(app.get(LoggerService))
   const configService = app.get(ConfigService)
 
   const expressApp = app.getHttpAdapter().getInstance()
