@@ -29,7 +29,7 @@ export class PlanGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ])
-    const requiredLimit = this.reflector.getAllAndOverride<'maxInvoicesPerMonth' | 'maxUsers'>(PLAN_LIMIT_KEY, [
+    const requiredLimit = this.reflector.getAllAndOverride<'maxInvoicesPerMonth' | 'maxUsers' | 'maxAiQueriesPerMonth' | 'maxOcrRunsPerMonth' | 'maxEmailsPerMonth'>(PLAN_LIMIT_KEY, [
       context.getHandler(),
       context.getClass(),
     ])
@@ -90,8 +90,41 @@ export class PlanGuard implements CanActivate {
           }
         }
       }
+
+      if (requiredLimit === 'maxAiQueriesPerMonth') {
+        await this.enforceUsageLimit(activeTenantId, 'ai_query', planConfig.maxAiQueriesPerMonth, 'consultas IA')
+      }
+
+      if (requiredLimit === 'maxOcrRunsPerMonth') {
+        await this.enforceUsageLimit(activeTenantId, 'ocr_run', planConfig.maxOcrRunsPerMonth, 'OCR')
+      }
+
+      if (requiredLimit === 'maxEmailsPerMonth') {
+        await this.enforceUsageLimit(activeTenantId, 'email_sent', planConfig.maxEmailsPerMonth, 'emails')
+      }
     }
 
     return true
+  }
+
+  private async enforceUsageLimit(tenantId: string, feature: string, limit: number | null, label: string) {
+    if (limit === null) return
+
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+
+    const aggregate = await this.prisma.usageRecord.aggregate({
+      where: {
+        tenantId,
+        feature,
+        recordedAt: { gte: startOfMonth },
+      },
+      _sum: { quantity: true },
+    })
+
+    const current = aggregate._sum.quantity || 0
+    if (current >= limit) {
+      throw new ForbiddenException(`Límite mensual de ${label} alcanzado (${limit}).`)
+    }
   }
 }

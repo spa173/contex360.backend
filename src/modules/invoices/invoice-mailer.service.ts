@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import PDFDocument from 'pdfkit';
 import { PrismaService } from '../database/prisma.service';
+import { UsageService } from '../usage/usage.service';
 
 export interface SendInvoiceMailPayload {
   tenantId: string;
@@ -19,7 +20,10 @@ export interface SendInvoiceMailPayload {
 export class InvoiceMailerService {
   private readonly logger = new Logger(InvoiceMailerService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly usageService: UsageService,
+  ) {}
 
   async generatePdf(payload: SendInvoiceMailPayload, tenantName: string): Promise<Buffer> {
     return new Promise((resolve, reject) => {
@@ -102,6 +106,7 @@ export class InvoiceMailerService {
         ],
       });
       this.logger.log(`Factura ${payload.invoiceNumber} enviada exitosamente a ${payload.clientEmail} usando SMTP de ${tenant.name}`);
+      this.usageService.recordUsage(payload.tenantId, 'email_sent');
     } catch (err) {
       this.logger.error(`Error enviando factura por SMTP para tenant ${tenant.name}:`, err);
     }

@@ -4,6 +4,7 @@ import { PrismaService } from '../database/prisma.service'
 import { LedgerService } from '../ledger/ledger.service'
 import { BadRequestException } from '@nestjs/common'
 import { InvoiceStatus } from '@prisma/client'
+import { UsageService } from '../usage/usage.service'
 
 describe('InvoicesService', () => {
   let service: InvoicesService
@@ -43,12 +44,19 @@ describe('InvoicesService', () => {
     create: vi.fn(),
   }
 
+  const mockUsageService = {
+    recordUsage: vi.fn(),
+    getUsage: vi.fn(),
+    checkLimit: vi.fn(),
+  }
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         InvoicesService,
         { provide: PrismaService, useValue: mockPrisma },
         { provide: LedgerService, useValue: mockLedger },
+        { provide: UsageService, useValue: mockUsageService },
       ],
     }).compile()
 

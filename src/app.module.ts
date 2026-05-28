@@ -1,11 +1,22 @@
-import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common'
+import { Module, NestModule, MiddlewareConsumer, OnApplicationShutdown } from '@nestjs/common'
 import { APP_INTERCEPTOR, APP_GUARD } from '@nestjs/core'
-import { ConfigModule } from '@nestjs/config'
+import { ConfigModule, ConfigService } from '@nestjs/config'
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler'
+import { OnboardingGuard } from './modules/onboarding/guard/onboarding.guard'
+import { OnboardingModule } from './modules/onboarding/onboarding.module'
+import { ActiveSubscriptionGuard } from './modules/subscriptions/active-subscription.guard'
+import { PlanGuard } from './modules/auth/plan.guard'
+import { TwoFactorGuard } from './modules/auth/two-factor.guard'
+import { TenantRateLimitGuard } from './common/guards/tenant-rate-limit.guard'
+import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module'
+import { LegalModule } from './modules/legal/legal.module'
+
 import { ScheduleModule } from '@nestjs/schedule'
 import { AppController } from './app.controller'
 import { AppService } from './app.service'
 import { RlsContextInterceptor } from './common/interceptors/rls-context.interceptor'
+import { LoggerModule } from './common/logger/logger.module'
+import { PrismaService } from './modules/database/prisma.service'
 import { AuthModule } from './modules/auth/auth.module'
 import { PrismaModule } from './modules/database/prisma.module'
 import { HealthModule } from './modules/health/health.module'
@@ -25,11 +36,15 @@ import { TreasuryModule } from './modules/treasury/treasury.module'
 import { QuotesModule } from './modules/quotes/quotes.module'
 import { SupportModule } from './modules/support/support.module'
 import { IntegrationsModule } from './modules/integrations/integrations.module'
-import { SubscriptionsModule } from './modules/subscriptions/subscriptions.module'
 import { HelpCenterModule } from './modules/help-center/help-center.module'
 import { CsrfMiddleware } from './common/middleware/csrf.middleware'
 import { CryptoModule } from './common/crypto/crypto.module'
-import { UsersModule } from './modules/users/users.module';
+import { UsersModule } from './modules/users/users.module'
+import { AuditModule } from './modules/audit/audit.module'
+import { PrivacyModule } from './modules/privacy/privacy.module'
+import { TaxesModule } from './modules/taxes/taxes.module'
+import { ContratosModule } from './modules/contratos/contratos.module'
+import { ApiModule } from './modules/api/api.module'
 
 @Module({
   imports: [
@@ -39,10 +54,11 @@ import { UsersModule } from './modules/users/users.module';
       envFilePath: ['.env.local', '.env'],
     }),
     ThrottlerModule.forRoot([
-      { name: 'short', ttl: 60000, limit: 100 }, // Aumentado el límite para evitar falsos positivos
-      { name: 'long', ttl: 3600000, limit: 1000 },
+      { name: 'short', ttl: 60000, limit: 30 },
+      { name: 'long', ttl: 3600000, limit: 300 },
     ]),
     ScheduleModule.forRoot(),
+    LoggerModule,
     PrismaModule,
     AuthModule,
     HealthModule,
@@ -64,17 +80,35 @@ import { UsersModule } from './modules/users/users.module';
     IntegrationsModule,
     SubscriptionsModule,
     HelpCenterModule,
+    OnboardingModule,
     UsersModule,
     CryptoModule,
+    LegalModule,
+    AuditModule,
+    PrivacyModule,
+    TaxesModule,
+    ContratosModule,
+    ApiModule,
   ],
   controllers: [AppController],
   providers: [
     AppService,
     { provide: APP_INTERCEPTOR, useClass: RlsContextInterceptor },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: TenantRateLimitGuard },
+    { provide: APP_GUARD, useClass: TwoFactorGuard },
+    { provide: APP_GUARD, useClass: OnboardingGuard },
+    { provide: APP_GUARD, useClass: ActiveSubscriptionGuard },
+    { provide: APP_GUARD, useClass: PlanGuard },
   ],
 })
-export class AppModule implements NestModule {
+export class AppModule implements NestModule, OnApplicationShutdown {
+  constructor(private prisma: PrismaService) {}
+
+  async onApplicationShutdown(signal?: string) {
+    await this.prisma.$disconnect()
+  }
+
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(CsrfMiddleware).forRoutes('*')
   }

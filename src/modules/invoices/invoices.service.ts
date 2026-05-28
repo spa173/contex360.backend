@@ -2,12 +2,14 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../database/prisma.service'
 import { LedgerService } from '../ledger/ledger.service'
 import { InvoiceStatus } from '@prisma/client'
+import { UsageService } from '../usage/usage.service'
 
 @Injectable()
 export class InvoicesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ledger: LedgerService,
+    private readonly usageService: UsageService,
   ) {}
 
   async findAll(tenantId: string) {
@@ -164,6 +166,9 @@ export class InvoicesService {
         where: { tenantId },
         data: { invoicesThisMonth: { increment: 1 } },
       })
+
+      // 5b. Record usage metric
+      await this.usageService.recordUsage(tenantId, 'invoice_created')
 
       // 6. Create Ledger Entry
       const clientName = (await tx.thirdParty.findUnique({ where: { id: data.clientId } }))?.name || 'Cliente Genérico'

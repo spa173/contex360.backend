@@ -115,8 +115,8 @@ export class UsersController {
   @UseGuards(PermissionsGuard)
   @Permissions('manage_users')
   @HttpCode(HttpStatus.OK)
-  async upsertMembership(@Body() body: UpsertMembershipDto) {
-    return this.usersService.upsertMembership(body)
+  async upsertMembership(@Body() body: UpsertMembershipDto, @AuthUser() authUser: AuthTokenPayload) {
+    return this.usersService.upsertMembership({ ...body, actorUserId: authUser.sub, actorEmail: authUser.email })
   }
 
   @Delete('memberships')

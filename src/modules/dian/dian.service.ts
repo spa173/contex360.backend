@@ -44,7 +44,7 @@ export interface DianResponse {
 
 type DianEnvironment = 'test' | 'production'
 
-type TenantDianConfig = Prisma.TenantGetPayload<{
+export type TenantDianConfig = Prisma.TenantGetPayload<{
   select: {
     id: true
     name: true
@@ -247,15 +247,26 @@ function extractCertificatePem(raw: string, password?: string | null) {
   }
 
   if (cleaned.includes('BEGIN CERTIFICATE') && cleaned.includes('BEGIN PRIVATE KEY')) {
-    const certMatch = cleaned.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/)
-    const keyMatch = cleaned.match(/-----BEGIN (?:RSA )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA )?PRIVATE KEY-----/)
-    if (!certMatch || !keyMatch) {
+    const beginCertIdx = cleaned.indexOf('-----BEGIN CERTIFICATE-----')
+    const endCertIdx = cleaned.indexOf('-----END CERTIFICATE-----')
+    
+    let beginKeyIdx = cleaned.indexOf('-----BEGIN PRIVATE KEY-----')
+    let endKeyIdx = cleaned.indexOf('-----END PRIVATE KEY-----')
+    let keyLength = '-----END PRIVATE KEY-----'.length
+    
+    if (beginKeyIdx === -1) {
+      beginKeyIdx = cleaned.indexOf('-----BEGIN RSA PRIVATE KEY-----')
+      endKeyIdx = cleaned.indexOf('-----END RSA PRIVATE KEY-----')
+      keyLength = '-----END RSA PRIVATE KEY-----'.length
+    }
+
+    if (beginCertIdx === -1 || endCertIdx === -1 || beginKeyIdx === -1 || endKeyIdx === -1) {
       throw new BadRequestException('No se pudo leer el certificado PEM.')
     }
 
     return {
-      privateKeyPem: keyMatch[0],
-      certificatePem: certMatch[0],
+      privateKeyPem: cleaned.slice(beginKeyIdx, endKeyIdx + keyLength),
+      certificatePem: cleaned.slice(beginCertIdx, endCertIdx + '-----END CERTIFICATE-----'.length),
     }
   }
 
@@ -410,8 +421,14 @@ export class DianService {
     private readonly invoiceMailer: InvoiceMailerService
   ) {}
 
-  async sendInvoice(invoice: DianInvoicePayload): Promise<DianResponse> {
-    const tenant = await this.prisma.tenant.findUnique({
+  async sendInvoice(
+    invoice: DianInvoicePayload,
+    issuerConfig?: {
+      tenant: TenantDianConfig
+      entityType: 'invoice' | 'subscription'
+    },
+  ): Promise<DianResponse> {
+    const tenant = issuerConfig?.tenant ?? await this.prisma.tenant.findUnique({
       where: { id: invoice.tenantId },
       select: {
         id: true,
@@ -438,13 +455,15 @@ export class DianService {
       throw new BadRequestException('Tenant no encontrado')
     }
 
-    const validation = await this.validateConfig(invoice.tenantId)
-    if (!validation.valid) {
-      return {
-        success: false,
-        status: 'rejected',
-        message: 'La configuración DIAN está incompleta.',
-        errors: validation.errors,
+    if (!issuerConfig) {
+      const validation = await this.validateConfig(invoice.tenantId)
+      if (!validation.valid) {
+        return {
+          success: false,
+          status: 'rejected',
+          message: 'La configuración DIAN está incompleta.',
+          errors: validation.errors,
+        }
       }
     }
 
@@ -459,86 +478,27 @@ export class DianService {
     const soapAction = environment === 'test' ? 'SendTestSetAsync' : 'SendBillSync'
 
     try {
-      const client = await soap.createClientAsync(wsdl, {
-        endpoint,
-        forceSoap12Headers: true,
-      })
-
-      client.setSecurity(new soap.WSSecurityCert(
-        certificate.privateKeyPem,
-        certificate.certificatePem,
+      const { result, trackId, accepted } = await this.executeDianSoapCall(
+        certificate,
         tenant.dianCertificatePassword || '',
-        {
-          hasTimeStamp: true,
-          signatureAlgorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
-          digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
-          signerOptions: {
-            prefix: 'ds',
-          },
-        },
-      ))
-
-      client.addSoapHeader(
-        {
-          'wsa:Action': buildSoapAction(soapAction),
-          'wsa:To': endpoint,
-          'wsa:MessageID': `urn:uuid:${randomUUID()}`,
-        },
-        undefined,
-        'wsa',
-        'http://www.w3.org/2005/08/addressing',
+        endpoint,
+        wsdl,
+        soapAction,
+        xmlFileName,
+        contentFile,
+        tenant.dianTestSetId || undefined,
       )
 
-      const request = environment === 'test'
-        ? {
-            fileName: xmlFileName,
-            contentFile,
-            testSetId: tenant.dianTestSetId,
-          }
-        : {
-            fileName: xmlFileName,
-            contentFile,
-          }
-
-      const method = environment === 'test' ? 'SendTestSetAsync' : 'SendBillSync'
-      const [soapResult] = await client[`${method}Async`](request)
-      const result = soapResult?.[`${method}Result`] || soapResult
-      const trackId = result?.ZipKey || result?.XmlDocumentKey || result?.TrackId || null
-      const accepted = Boolean(result?.IsValid) || Boolean(trackId)
-
-      await this.appendDianTimeline(invoice.tenantId, invoice.invoiceId, {
-        type: 'dian',
-        action: 'send',
-        at: new Date().toISOString(),
-        status: accepted ? 'sent' : 'rejected',
-        message: accepted
-          ? 'Factura transmitida a DIAN.'
-          : 'DIAN devolvió un rechazo o no generó seguimiento.',
-        cufe,
-        trackId: trackId || undefined,
-        xmlFileName,
-        response: safeJson(result ?? {}),
-      })
-
-      await this.prisma.invoice.update({
-        where: { id: invoice.invoiceId },
-        data: {
-          status: accepted ? InvoiceStatus.sent : InvoiceStatus.emitted,
-        },
-      })
-
-      if (accepted) {
-        this.invoiceMailer.sendInvoice({
-          tenantId: invoice.tenantId,
-          invoiceId: invoice.invoiceId,
-          clientEmail: invoice.client.email,
-          clientName: invoice.client.name,
-          invoiceNumber: invoice.number,
+      if (!issuerConfig || issuerConfig.entityType === 'invoice') {
+        await this.persistInvoiceAndNotify(
+          invoice,
+          accepted,
           cufe,
-          total: invoice.total,
+          trackId,
           xmlFileName,
-          xmlBase64: contentFile,
-        }).catch(err => this.logger.error('Error in background invoice mailing', err));
+          contentFile,
+          result,
+        )
       }
 
       return {
@@ -558,16 +518,18 @@ export class DianService {
     } catch (error) {
       this.logger.error(`Error enviando factura ${invoice.number} a DIAN`, error instanceof Error ? error.stack : undefined)
 
-      await this.appendDianTimeline(invoice.tenantId, invoice.invoiceId, {
-        type: 'dian',
-        action: 'send',
-        at: new Date().toISOString(),
-        status: 'rejected',
-        message: error instanceof Error ? error.message : 'Error desconocido al transmitir a DIAN.',
-        cufe,
-        xmlFileName,
-        response: { error: error instanceof Error ? error.message : String(error) },
-      })
+      if (!issuerConfig || issuerConfig.entityType === 'invoice') {
+        await this.appendDianTimeline(invoice.tenantId, invoice.invoiceId, {
+          type: 'dian',
+          action: 'send',
+          at: new Date().toISOString(),
+          status: 'rejected',
+          message: error instanceof Error ? error.message : 'Error desconocido al transmitir a DIAN.',
+          cufe,
+          xmlFileName,
+          response: { error: error instanceof Error ? error.message : String(error) },
+        })
+      }
 
       return {
         success: false,
@@ -896,6 +858,112 @@ export class DianService {
         timeline: timeline as unknown as Prisma.InputJsonValue,
       },
     })
+  }
+
+  private async executeDianSoapCall(
+    certificate: ReturnType<typeof extractCertificatePem>,
+    password: string,
+    endpoint: string,
+    wsdl: string,
+    soapAction: string,
+    xmlFileName: string,
+    contentFile: string,
+    dianTestSetId?: string,
+  ): Promise<{ result: any; trackId: string | null; accepted: boolean }> {
+    const client = await soap.createClientAsync(wsdl, {
+      endpoint,
+      forceSoap12Headers: true,
+    })
+
+    client.setSecurity(new soap.WSSecurityCert(
+      certificate.privateKeyPem,
+      certificate.certificatePem,
+      password,
+      {
+        hasTimeStamp: true,
+        signatureAlgorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
+        digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
+        signerOptions: {
+          prefix: 'ds',
+        },
+      },
+    ))
+
+    client.addSoapHeader(
+      {
+        'wsa:Action': buildSoapAction(soapAction),
+        'wsa:To': endpoint,
+        'wsa:MessageID': `urn:uuid:${randomUUID()}`,
+      },
+      undefined,
+      'wsa',
+      'http://www.w3.org/2005/08/addressing',
+    )
+
+    const isTest = soapAction === 'SendTestSetAsync'
+    const request = isTest
+      ? {
+          fileName: xmlFileName,
+          contentFile,
+          testSetId: dianTestSetId,
+        }
+      : {
+          fileName: xmlFileName,
+          contentFile,
+        }
+
+    const method = isTest ? 'SendTestSetAsync' : 'SendBillSync'
+    const [soapResult] = await client[`${method}Async`](request)
+    const result = soapResult?.[`${method}Result`] || soapResult
+    const trackId = result?.ZipKey || result?.XmlDocumentKey || result?.TrackId || null
+    const accepted = Boolean(result?.IsValid) || Boolean(trackId)
+
+    return { result, trackId, accepted }
+  }
+
+  private async persistInvoiceAndNotify(
+    invoice: DianInvoicePayload,
+    accepted: boolean,
+    cufe: string,
+    trackId: string | null,
+    xmlFileName: string,
+    contentFile: string,
+    result: any,
+  ): Promise<void> {
+    await this.appendDianTimeline(invoice.tenantId, invoice.invoiceId, {
+      type: 'dian',
+      action: 'send',
+      at: new Date().toISOString(),
+      status: accepted ? 'sent' : 'rejected',
+      message: accepted
+        ? 'Factura transmitida a DIAN.'
+        : 'DIAN devolvió un rechazo o no generó seguimiento.',
+      cufe,
+      trackId: trackId || undefined,
+      xmlFileName,
+      response: safeJson(result ?? {}),
+    })
+
+    await this.prisma.invoice.update({
+      where: { id: invoice.invoiceId },
+      data: {
+        status: accepted ? InvoiceStatus.sent : InvoiceStatus.emitted,
+      },
+    })
+
+    if (accepted) {
+      this.invoiceMailer.sendInvoice({
+        tenantId: invoice.tenantId,
+        invoiceId: invoice.invoiceId,
+        clientEmail: invoice.client.email,
+        clientName: invoice.client.name,
+        invoiceNumber: invoice.number,
+        cufe,
+        total: invoice.total,
+        xmlFileName,
+        xmlBase64: contentFile,
+      }).catch(err => this.logger.error('Error in background invoice mailing', err))
+    }
   }
 
   private extractSoapErrors(result: any): string[] {

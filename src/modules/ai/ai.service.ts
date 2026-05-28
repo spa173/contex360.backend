@@ -8,6 +8,7 @@ import { Prisma, ThirdPartyKind } from '@prisma/client'
 import { PrismaService } from '../database/prisma.service'
 import { AnalyticsService } from '../analytics/analytics.service'
 import { NotificationService } from '../notification/notification.service'
+import { UsageService } from '../usage/usage.service'
 import { PERSONAL_ASSISTANT_PROMPT } from './ai.prompts'
 
 const MODEL = 'llama-3.1-8b-instant'
@@ -332,16 +333,19 @@ function stripHtmlTags(str: string): string {
 
 @Injectable()
 export class AiService {
-  private readonly groq: Groq
+  private readonly groq!: Groq
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly analytics: AnalyticsService,
     private readonly notification: NotificationService,
     private readonly config: ConfigService,
+    private readonly usageService: UsageService,
   ) {
     const apiKey = this.config.get<string>('GROQ_API_KEY')
-    this.groq = new Groq({ apiKey: apiKey || '' })
+    if (apiKey) {
+      this.groq = new Groq({ apiKey })
+    }
   }
 
   async checkHealth() {
@@ -563,9 +567,15 @@ export class AiService {
         responseText = responseMessage.content ?? 'No pude generar una respuesta de texto.'
       }
 
+      this.usageService.recordUsage(tenantId, 'ai_query')
+      if (extractedVisionContent) {
+        this.usageService.recordUsage(tenantId, 'ocr_run')
+      }
+
       return this.formatResponse(responseText.trim(), extractedVisionContent || extractedAttachmentContent)
     } catch (error: any) {
       console.error('AiService Error:', safeLogFragment(error.stack || error.message || error))
+      this.usageService.recordUsage(tenantId, 'ai_query').catch(() => {})
       const errStr = error.message || ''
       if (errStr.includes('failed_generation')) {
         try {
@@ -838,8 +848,13 @@ ${JSON.stringify(texts, null, 2)}`
         max_tokens: 2048,
       })
       const response = completion.choices[0]?.message?.content ?? '{}'
-      const jsonMatch = response.match(/\{[\s\S]*?\}/)
-      return JSON.parse(jsonMatch ? jsonMatch[0] : response)
+      const firstBrace = response.indexOf('{')
+      const lastBrace = response.lastIndexOf('}')
+      let jsonContent = response
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        jsonContent = response.slice(firstBrace, lastBrace + 1)
+      }
+      return JSON.parse(jsonContent)
     } catch (error: any) {
       console.error('Translation Error:', safeLogFragment(error.message || error))
       throw new Error(`Failed to translate: ${safeLogFragment(error.message || error)}`)

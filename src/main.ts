@@ -6,7 +6,6 @@ import { NestFactory } from '@nestjs/core'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import { AppModule } from './app.module'
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter'
-import { LoggingInterceptor } from './common/interceptors/logging.interceptor'
 
 import { json, urlencoded } from 'express'
 import helmet from 'helmet'
@@ -27,19 +26,19 @@ export async function bootstrap() {
   }
 
   validateEnv()
-  const app = await NestFactory.create(AppModule)
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true,
+  })
   appInstance = app
+  app.useLogger(app.get(Logger))
   const configService = app.get(ConfigService)
 
-  // Bancolombia // Hugging Face termina TLS en el proxy y reenvía la IP real
-  // en X-Forwarded-For. Sin esto: rate limiting por IP del proxy,
-  // sesiones con IP incorrecta y cookies secure rechazadas en HTTP interno.
   const expressApp = app.getHttpAdapter().getInstance()
   expressApp.set('trust proxy', 1)
 
   app.use(json({ limit: '50mb' }))
   app.use(urlencoded({ extended: true, limit: '500mb' }))
-  
+
   const corsOrigin = configService.get<string>('CORS_ORIGIN')
   const allowedOrigins = corsOrigin ? corsOrigin.split(',') : true
 
@@ -53,7 +52,6 @@ export async function bootstrap() {
     optionsSuccessStatus: 204,
   })
 
-  // Security headers via Helmet
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
@@ -88,26 +86,49 @@ export async function bootstrap() {
   )
 
   app.useGlobalFilters(new AllExceptionsFilter())
-  app.useGlobalInterceptors(new LoggingInterceptor())
 
-  // Swagger solo en desarrollo — deshabilitado en producción por seguridad
   if (!isProduction) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle(appName)
       .setDescription('API base para Contex360')
       .setVersion('0.1.0')
       .addBearerAuth()
+      .addTag('Auth', 'Autenticación y gestión de sesiones')
+      .addTag('Health', 'Monitoreo y estado del servidor')
+      .addTag('Onboarding', 'Configuración inicial de empresa')
+      .addTag('Products', 'Gestión de productos')
+      .addTag('Invoices', 'Facturación electrónica')
+      .addTag('Third Parties', 'Gestión de terceros')
+      .addTag('Inventory', 'Control de inventario')
+      .addTag('Purchases', 'Compras')
+      .addTag('Treasury', 'Tesorería')
       .build()
 
     try {
       const document = SwaggerModule.createDocument(app, swaggerConfig)
       SwaggerModule.setup(swaggerPath, app, document)
+      logger.log(`Swagger documentation available at /${swaggerPath}`)
     } catch (error: any) {
       logger.warn(`Failed to generate Swagger documentation: ${String(error.message || error).replace(/[\r\n]+/g, ' ')}`)
     }
   }
 
-  // Solo hacemos listen si NO estamos en entorno de Vite (donde Vite maneja el servidor)
+  // Graceful shutdown handlers
+  const shutdownSignals: NodeJS.Signals[] = ['SIGTERM', 'SIGINT']
+  shutdownSignals.forEach((signal) => {
+    process.on(signal, async () => {
+      logger.log(`Received ${signal}, shutting down gracefully...`)
+      try {
+        await app.close()
+        logger.log('Application closed successfully')
+        process.exit(0)
+      } catch (err) {
+        logger.error(`Error during shutdown: ${err}`)
+        process.exit(1)
+      }
+    })
+  })
+
   if (!process.env.VITE) {
     await app.listen(port, '0.0.0.0')
     const url = await app.getUrl()

@@ -20,6 +20,9 @@ export class LoginRequestDto {
 
   @IsOptional()
   rememberMe?: boolean
+
+  @IsOptional()
+  privacyAccepted?: boolean
 }
 
 export interface TotpRequiredResponse {
@@ -173,9 +176,11 @@ export interface AuthResponseSnapshot {
   user: PublicUserSnapshot
   session: PublicSessionSnapshot
   activeTenantId: string
+  onboardingCompleted?: boolean
   accessibleTenants: PublicTenantSnapshot[]
   subscription?: PublicSubscriptionSnapshot
   memberships: {
+    userId: string
     tenantId: string
     role: string
     permissions: string[]

@@ -114,7 +114,7 @@ export class AuthService {
 
     const passwordMatches = user.passwordHash ? await compare(password, user.passwordHash) : false
     if (!passwordMatches) {
-      await this.markFailedLogin(user, passwordPolicy)
+      await this.markFailedLogin(user, passwordPolicy, context)
       throw new UnauthorizedException('Credenciales invalidas. Revisa el email y la clave.')
     }
 
@@ -135,6 +135,22 @@ export class AuthService {
     const passwordExpired = this.isPasswordExpired(user.securityProfile)
     if (passwordExpired) {
       return { ok: false, requiresPasswordChange: true, message: 'Tu contrasena ha expirado. Debes establecer una nueva para continuar.' }
+    }
+
+    if (credentials.privacyAccepted) {
+      const now = new Date()
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: {
+          privacyConsentAt: now,
+          privacyConsentVersion: 'v1.0 (Ley 1581)',
+          policyAcceptedAt: now,
+          policyVersion: 'v1.0 (Ley 1581)',
+        },
+      })
+      user.privacyConsentAt = now
+      user.policyAcceptedAt = now
+      user.policyVersion = 'v1.0 (Ley 1581)'
     }
 
     return this.issueAuthResponse(user, context)
@@ -257,12 +273,15 @@ export class AuthService {
       ? await this.getSubscriptionSnapshot(activeTenant.id)
       : undefined
 
+    const isOnboardingCompleted = activeTenant ? !!activeTenant.onboardingCompletedAt : false
+
     return {
       ok: true,
       message: 'Sesion activa.',
       user: this.mapUserSnapshot(user),
       session: this.mapSessionSnapshot({ ...session, lastSeenAt: now }),
       activeTenantId: activeTenant?.id || 'system',
+      onboardingCompleted: isOnboardingCompleted,
       accessibleTenants: user.isSystemOwner 
         ? (await this.prisma.tenant.findMany()).map(t => this.mapTenantSnapshot(t))
         : user.memberships.map((membership) => this.mapTenantSnapshot(membership.tenant)),
@@ -348,6 +367,28 @@ export class AuthService {
       create: this.buildDefaultSecurityProfile(user.id, now),
     })
 
+    // Detecta nuevo dispositivo
+    const trusted = (user.securityProfile?.trustedFingerprints || []) as string[]
+    if (session.fingerprint && !trusted.includes(session.fingerprint)) {
+      const updatedTrusted = [...trusted, session.fingerprint].slice(-20)
+      await this.prisma.userSecurityProfile.update({
+        where: { userId: user.id },
+        data: { trustedFingerprints: updatedTrusted },
+      })
+      setImmediate(() => {
+        const device = session.device || 'Desconocido'
+        const browser = session.browser || 'Desconocido'
+        const os = session.os || 'Desconocido'
+        const ip = session.ip || 'Desconocida'
+        const location = session.location || 'Desconocida'
+        const time = now.toLocaleString('es-CO', { timeZone: 'America/Bogota' })
+        const bodyHtml = this.notificationService.buildNewLoginHtml(device, browser, os, ip, location, time)
+        this.notificationService
+          .sendSecurityAlert(user.email, user.name, 'Nuevo inicio de sesión — Contex360', bodyHtml)
+          .catch((err) => console.error('Error enviando alerta de nuevo dispositivo:', err))
+      })
+    }
+
     const accessToken = await this.jwtService.signAsync({
       sub: user.id,
       sessionId: session.id,
@@ -369,6 +410,8 @@ export class AuthService {
       ? await this.getSubscriptionSnapshot(activeTenant.id)
       : undefined
 
+    const isOnboardingCompleted = activeTenant ? !!activeTenant.onboardingCompletedAt : false
+
     return {
       ok: true,
       message: 'Sesion iniciada.',
@@ -377,6 +420,7 @@ export class AuthService {
       user: this.mapUserSnapshot({ ...user, lastLoginAt: now }),
       session: this.mapSessionSnapshot(session),
       activeTenantId: activeTenant?.id || 'system',
+      onboardingCompleted: isOnboardingCompleted,
       accessibleTenants: user.isSystemOwner
         ? (await this.prisma.tenant.findMany()).map(t => this.mapTenantSnapshot(t))
         : user.memberships.map((membership) => this.mapTenantSnapshot(membership.tenant)),
@@ -501,7 +545,7 @@ export class AuthService {
     })
   }
 
-  private async markFailedLogin(user: UserWithAuthRelations, policy: PasswordPolicySnapshot) {
+  private async markFailedLogin(user: UserWithAuthRelations, policy: PasswordPolicySnapshot, context?: AuthRequestContext) {
     const nextAttempts = (user.securityProfile?.failedLoginAttempts || 0) + 1
     const lockedUntil =
       nextAttempts >= policy.failedAttemptsThreshold
@@ -532,6 +576,21 @@ export class AuthService {
         failedLoginAttempts: nextAttempts,
         lockedUntil,
       },
+    })
+
+    // Notifica al usuario del intento fallido
+    const ip = context?.ip || 'Desconocida'
+    const time = new Date().toLocaleString('es-CO', { timeZone: 'America/Bogota' })
+    const bodyHtml = this.notificationService.buildFailedLoginHtml(nextAttempts, ip, time, !!lockedUntil)
+    setImmediate(() => {
+      this.notificationService
+        .sendSecurityAlert(
+          user.email,
+          user.name,
+          `Intento de inicio de sesión fallido — Contex360`,
+          bodyHtml,
+        )
+        .catch((err) => console.error('Error enviando alerta de fallo login:', err))
     })
   }
 
@@ -655,6 +714,26 @@ export class AuthService {
         },
       }),
     ])
+
+    const now = new Date()
+    await this.prisma.auditEvent.create({
+      data: {
+        entity: 'autenticacion',
+        action: 'Cambio de Contraseña',
+        description: `El usuario ${user.email} cambió su contraseña.`,
+        actor: user.email,
+        actorUserId: user.id,
+        severity: AuditSeverity.info,
+      },
+    })
+
+    const time = now.toLocaleString('es-CO', { timeZone: 'America/Bogota' })
+    const bodyHtml = this.notificationService.buildPasswordChangedHtml(time, 'Solicitud interna')
+    setImmediate(() => {
+      this.notificationService
+        .sendSecurityAlert(user.email, user.name, 'Contraseña actualizada — Contex360', bodyHtml)
+        .catch((err) => console.error('Error enviando alerta de cambio de contraseña:', err))
+    })
 
     return { ok: true, message: 'Contrasena actualizada correctamente.' }
   }
@@ -815,6 +894,25 @@ export class AuthService {
           },
         }),
       ])
+
+      await this.prisma.auditEvent.create({
+        data: {
+          entity: 'autenticacion',
+          action: 'Restablecimiento de Contraseña',
+          description: `El usuario ${user.email} restableció su contraseña mediante enlace de recuperación.`,
+          actor: user.email,
+          actorUserId: user.id,
+          severity: AuditSeverity.warning,
+        },
+      })
+
+      const time = now.toLocaleString('es-CO', { timeZone: 'America/Bogota' })
+      const bodyHtml = this.notificationService.buildPasswordChangedHtml(time, 'Enlace de recuperación')
+      setImmediate(() => {
+        this.notificationService
+          .sendSecurityAlert(user.email, user.name, 'Contraseña restablecida — Contex360', bodyHtml)
+          .catch((err) => console.error('Error enviando alerta de restablecimiento de contraseña:', err))
+      })
 
       return { ok: true, message: 'Tu contraseña ha sido restablecida exitosamente.' }
     } catch (e) {
