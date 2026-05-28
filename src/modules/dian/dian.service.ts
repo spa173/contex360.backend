@@ -247,15 +247,26 @@ function extractCertificatePem(raw: string, password?: string | null) {
   }
 
   if (cleaned.includes('BEGIN CERTIFICATE') && cleaned.includes('BEGIN PRIVATE KEY')) {
-    const certMatch = cleaned.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/)
-    const keyMatch = cleaned.match(/-----BEGIN (?:RSA )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA )?PRIVATE KEY-----/)
-    if (!certMatch || !keyMatch) {
+    const beginCertIdx = cleaned.indexOf('-----BEGIN CERTIFICATE-----')
+    const endCertIdx = cleaned.indexOf('-----END CERTIFICATE-----')
+    
+    let beginKeyIdx = cleaned.indexOf('-----BEGIN PRIVATE KEY-----')
+    let endKeyIdx = cleaned.indexOf('-----END PRIVATE KEY-----')
+    let keyLength = '-----END PRIVATE KEY-----'.length
+    
+    if (beginKeyIdx === -1) {
+      beginKeyIdx = cleaned.indexOf('-----BEGIN RSA PRIVATE KEY-----')
+      endKeyIdx = cleaned.indexOf('-----END RSA PRIVATE KEY-----')
+      keyLength = '-----END RSA PRIVATE KEY-----'.length
+    }
+
+    if (beginCertIdx === -1 || endCertIdx === -1 || beginKeyIdx === -1 || endKeyIdx === -1) {
       throw new BadRequestException('No se pudo leer el certificado PEM.')
     }
 
     return {
-      privateKeyPem: keyMatch[0],
-      certificatePem: certMatch[0],
+      privateKeyPem: cleaned.slice(beginKeyIdx, endKeyIdx + keyLength),
+      certificatePem: cleaned.slice(beginCertIdx, endCertIdx + '-----END CERTIFICATE-----'.length),
     }
   }
 
