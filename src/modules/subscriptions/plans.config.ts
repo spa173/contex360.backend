@@ -20,7 +20,7 @@ export const PLANS: Record<'starter' | 'pyme' | 'enterprise', PlanConfig> = {
     maxAiQueriesPerMonth: 100,
     maxOcrRunsPerMonth: 10,
     maxEmailsPerMonth: 200,
-    modules: ['dashboard', 'billing', 'quotes', 'third-parties'],
+    modules: ['dashboard', 'billing', 'quotes', 'third-parties', 'subscription'],
   },
   pyme: {
     name: 'Pyme',
@@ -42,6 +42,7 @@ export const PLANS: Record<'starter' | 'pyme' | 'enterprise', PlanConfig> = {
       'reports',
       'users',
       'ai',
+      'subscription',
     ],
   },
   enterprise: {
