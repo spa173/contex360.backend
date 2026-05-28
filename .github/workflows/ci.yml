@@ -40,8 +40,14 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Run Unit Tests
-        run: npm test
+      - name: Run Unit Tests with Coverage
+        run: npm run test:coverage
+
+      - name: SonarCloud Scan
+        uses: sonarsource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: Deploy to Hugging Face (Production)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
