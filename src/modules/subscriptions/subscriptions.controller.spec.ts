@@ -1,7 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { BadRequestException } from '@nestjs/common'
 import { SubscriptionsController } from './subscriptions.controller'
-import { SubscriptionsService } from './subscriptions.service'
 import { WompiService } from './wompi.service'
 import { DianService } from '../dian/dian.service'
 import { NotificationService } from '../notification/notification.service'
@@ -68,7 +67,7 @@ describe('SubscriptionsController — wompiWebhook', () => {
       mockPrisma as any,
       mockNotificationService as any,
       mockDianService as any,
-      { generateInvoicePdf: vi.fn().mockReturnValue('/tmp/test.pdf') } as any,
+      { generateInvoicePdf: vi.fn().mockReturnValue('./test.pdf') } as any,
       { sendInvoiceEmail: vi.fn() } as any,
       { getAvailableCurrencies: vi.fn().mockReturnValue([]) } as any,
     )

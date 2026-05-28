@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { execSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { PrismaService } from '../database/prisma.service';
 
@@ -24,12 +24,12 @@ export class BackupRestoreService {
       return [];
     }
 
-    const files = require('fs').readdirSync(backupDir)
+    const files = readdirSync(backupDir)
       .filter((f: string) => f.startsWith('contex360-backup-') && f.endsWith('.sql.gz'))
       .map((f: string) => ({
         name: f,
         path: join(backupDir, f),
-        time: require('fs').statSync(join(backupDir, f)).mtime.getTime(),
+        time: statSync(join(backupDir, f)).mtime.getTime(),
       }))
       .sort((a: BackupFile, b: BackupFile) => b.time - a.time);
 
@@ -189,7 +189,7 @@ export class BackupRestoreService {
     const { execFile } = await import('node:child_process');
     // Decompress and restore in one pipeline
     const gunzip = require('child_process').execSync('gunzip', { 
-      input: require('fs').readFileSync(backupPath), 
+      input: require('node:fs').readFileSync(backupPath), 
       maxBuffer: 1024 * 1024 * 50 // 50MB buffer
     });
 

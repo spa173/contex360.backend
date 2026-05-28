@@ -110,51 +110,15 @@ export class ChurnDetectionService {
     const dormantTenants: ChurnRiskMetrics['dormantTenants'] = []
 
     for (const sub of subscriptions) {
-      const allUsers = sub.tenant.memberships.map((m) => m.user)
-      const lastLoginOverall = allUsers.reduce<Date | null>(
-        (latest, u) => (u.lastLoginAt && (!latest || u.lastLoginAt > latest) ? u.lastLoginAt : latest),
-        null,
+      this.analyzeSubscriptionMetrics(
+        sub,
+        now,
+        thirtyDaysAgo,
+        ninetyDaysAgo,
+        atRiskTenants,
+        churnedTenants,
+        dormantTenants,
       )
-
-      if (!sub.active && sub.renewsAt && sub.renewsAt < now) {
-        churnedTenants.push({
-          id: sub.tenant.id,
-          name: sub.tenant.name,
-          churnedSince: sub.renewsAt.toISOString(),
-        })
-        continue
-      }
-
-      if (sub.active && sub.renewsAt) {
-        const msUntilRenewal = sub.renewsAt.getTime() - now.getTime()
-        const daysUntilExpiry = Math.ceil(msUntilRenewal / (1000 * 60 * 60 * 24))
-
-        if (daysUntilExpiry <= 7 && daysUntilExpiry > 0) {
-          atRiskTenants.push({
-            id: sub.tenant.id,
-            name: sub.tenant.name,
-            reason: 'Renovación próxima',
-            daysUntilExpiry,
-          })
-        }
-      }
-
-      if (lastLoginOverall && lastLoginOverall < thirtyDaysAgo && sub.active) {
-        const daysSinceLastLogin = Math.floor((now.getTime() - lastLoginOverall.getTime()) / (1000 * 60 * 60 * 24))
-        dormantTenants.push({
-          id: sub.tenant.id,
-          name: sub.tenant.name,
-          daysSinceLastLogin,
-          planType: sub.planType,
-        })
-      } else if (!lastLoginOverall && sub.createdAt < ninetyDaysAgo && sub.active) {
-        dormantTenants.push({
-          id: sub.tenant.id,
-          name: sub.tenant.name,
-          daysSinceLastLogin: 0,
-          planType: sub.planType,
-        })
-      }
     }
 
     return {
@@ -165,6 +129,62 @@ export class ChurnDetectionService {
       atRiskTenants,
       churnedTenants,
       dormantTenants,
+    }
+  }
+
+  private analyzeSubscriptionMetrics(
+    sub: any,
+    now: Date,
+    thirtyDaysAgo: Date,
+    ninetyDaysAgo: Date,
+    atRiskTenants: ChurnRiskMetrics['atRiskTenants'],
+    churnedTenants: ChurnRiskMetrics['churnedTenants'],
+    dormantTenants: ChurnRiskMetrics['dormantTenants'],
+  ): void {
+    const allUsers = sub.tenant.memberships.map((m: any) => m.user)
+    const lastLoginOverall = allUsers.reduce(
+      (latest: Date | null, u: any) => (u.lastLoginAt && (!latest || u.lastLoginAt > latest) ? u.lastLoginAt : latest),
+      null,
+    )
+
+    if (!sub.active && sub.renewsAt && sub.renewsAt < now) {
+      churnedTenants.push({
+        id: sub.tenant.id,
+        name: sub.tenant.name,
+        churnedSince: sub.renewsAt.toISOString(),
+      })
+      return
+    }
+
+    if (sub.active && sub.renewsAt) {
+      const msUntilRenewal = sub.renewsAt.getTime() - now.getTime()
+      const daysUntilExpiry = Math.ceil(msUntilRenewal / (1000 * 60 * 60 * 24))
+
+      if (daysUntilExpiry <= 7 && daysUntilExpiry > 0) {
+        atRiskTenants.push({
+          id: sub.tenant.id,
+          name: sub.tenant.name,
+          reason: 'Renovación próxima',
+          daysUntilExpiry,
+        })
+      }
+    }
+
+    if (lastLoginOverall && lastLoginOverall < thirtyDaysAgo && sub.active) {
+      const daysSinceLastLogin = Math.floor((now.getTime() - lastLoginOverall.getTime()) / (1000 * 60 * 60 * 24))
+      dormantTenants.push({
+        id: sub.tenant.id,
+        name: sub.tenant.name,
+        daysSinceLastLogin,
+        planType: sub.planType,
+      })
+    } else if (!lastLoginOverall && sub.createdAt < ninetyDaysAgo && sub.active) {
+      dormantTenants.push({
+        id: sub.tenant.id,
+        name: sub.tenant.name,
+        daysSinceLastLogin: 0,
+        planType: sub.planType,
+      })
     }
   }
 }
