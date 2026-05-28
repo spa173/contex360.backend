@@ -36,11 +36,12 @@ export class BackupVerificationScheduler {
         // Optionally send alert to administrators
         this.alertAdministrators(`Backup verification FAILED: ${result.message}`);
       }
-    } catch (error) {
-      this.logger.error(`Error during backup verification:`, error);
-      this.alertAdministrators(`Backup verification ERROR: ${error.message}`);
+    } catch (error: any) {
+      const err = error as Error;
+      this.logger.error(`Error during backup verification:`, err);
+      this.alertAdministrators(`Backup verification ERROR: ${err.message}`);
       // Re-throw to ensure scheduler failure is noticed
-      throw error;
+      throw err;
     }
   }
 
@@ -59,8 +60,9 @@ export class BackupVerificationScheduler {
       //   'Backup Verification Failed',
       //   message
       // );
-    } catch (error) {
-      this.logger.error(`Failed to send administrator alert:`, error);
+    } catch (error: any) {
+      const err = error as Error;
+      this.logger.error(`Failed to send administrator alert:`, err);
     }
   }
 }

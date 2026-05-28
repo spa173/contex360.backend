@@ -59,9 +59,10 @@ export class BackupVerificationService {
         } else {
           return { valid: false, message: 'Backup restoration succeeded but verification query failed' };
         }
-      } catch (error) {
-        this.logger.error(`Backup verification failed:`, error);
-        return { valid: false, message: `Backup verification failed: ${error.message}` };
+      } catch (error: any) {
+        const err = error as Error;
+        this.logger.error(`Backup verification failed:`, err);
+        return { valid: false, message: `Backup verification failed: ${err.message}` };
       } finally {
         // Clean up: drop the temporary database
         try {
@@ -70,9 +71,10 @@ export class BackupVerificationService {
           this.logger.warn(`Failed to drop temporary database ${tempDbName}:`, cleanupError);
         }
       }
-    } catch (error) {
-      this.logger.error(`Error during backup verification:`, error);
-      return { valid: false, message: `Unexpected error during backup verification: ${error.message}` };
+    } catch (error: any) {
+      const err = error as Error;
+      this.logger.error(`Error during backup verification:`, err);
+      return { valid: false, message: `Unexpected error during backup verification: ${err.message}` };
     }
   }
 
@@ -81,13 +83,13 @@ export class BackupVerificationService {
    */
   private getBackupFiles(backupDir: string): BackupFile[] {
     const files = readdirSync(backupDir)
-      .filter(f => f.startsWith('contex360-backup-') && f.endsWith('.sql.gz'))
-      .map(f => ({
+      .filter((f: string) => f.startsWith('contex360-backup-') && f.endsWith('.sql.gz'))
+      .map((f: string) => ({
         name: f,
         path: join(backupDir, f),
         time: statSync(join(backupDir, f)).mtime.getTime(),
       }))
-      .sort((a, b) => b.time - a.time);
+      .sort((a: BackupFile, b: BackupFile) => b.time - a.time);
 
     return files;
   }
@@ -125,7 +127,8 @@ export class BackupVerificationService {
     const gunzip = execSync('gunzip', { input: require('fs').readFileSync(backupPath), maxBuffer: 1024 * 1024 * 50 }); // 50MB buffer
 
     // Now restore to the database
-    const restoreCommand = `psql "${process.env.DATABASE_URL.replace(/\/[^\/]+$/, `/${dbName}`)}"`;
+    const dbUrl = process.env.DATABASE_URL || '';
+    const restoreCommand = `psql "${dbUrl.replace(/\/[^\/]+$/, `/${dbName}`)}"`;
     execSync(restoreCommand, { input: gunzip, maxBuffer: 1024 * 1024 * 50 });
   }
 
@@ -139,16 +142,18 @@ export class BackupVerificationService {
     // Note: We need to create a temporary Prisma client for the temporary database.
     // For simplicity, we'll just execute a SQL query via psql.
 
+    const dbUrl = process.env.DATABASE_URL || '';
     const query = 'SELECT COUNT(*) FROM tenant;';
-    const command = `psql "${process.env.DATABASE_URL.replace(/\/[^\/]+$/, `/${dbName}`)}" -c "${query}" -t -A`;
+    const command = `psql "${dbUrl.replace(/\/[^\/]+$/, `/${dbName}`)}" -c "${query}" -t -A`;
 
     try {
       const result = execSync(command, { encoding: 'utf8', maxBuffer: 1024 * 1024 });
       const count = parseInt(result.trim(), 10);
       this.logger.log(`Verification query result: ${count} tenants found`);
       return !isNaN(count); // If we got a number, the query succeeded
-    } catch (error) {
-      this.logger.error(`Verification query failed:`, error);
+    } catch (error: any) {
+      const err = error as Error;
+      this.logger.error(`Verification query failed:`, err);
       return false;
     }
   }
@@ -164,9 +169,10 @@ export class BackupVerificationService {
     // Drop the target database if it exists (to avoid conflicts)
     try {
       this.dropDatabase(targetDbName);
-    } catch (error) {
+    } catch (error: any) {
       // Ignore if the database doesn't exist
-      this.logger.warn(`Target database ${targetDbName} does not exist or could not be dropped:`, error.message);
+      const err = error as Error;
+      this.logger.warn(`Target database ${targetDbName} does not exist or could not be dropped: ${err.message}`);
     }
 
     // Create the target database

@@ -2,18 +2,21 @@ import { Injectable, Logger } from '@nestjs/common'
 import { Cron, CronExpression } from '@nestjs/schedule'
 import { execSync } from 'node:child_process'
 
+const CRON_TIME = process.env.BACKUP_SCHEDULE || '0 2 * * *';
+const TIMEZONE = 'America/Bogota';
+
 @Injectable()
 export class BackupScheduler {
   private readonly logger = new Logger(BackupScheduler.name)
-  private readonly cronTime: string = process.env.BACKUP_SCHEDULE || '0 2 * * *'
-  private readonly timezone: string = 'America/Bogota'
+  private readonly cronTime: string = CRON_TIME
+  private readonly timezone: string = TIMEZONE
 
   /**
    * Backup diario basado en la variable de entorno BACKUP_SCHEDULE (por defecto: 0 2 * * * a las 2:00 AM hora de Colombia)
    * RPO (Recovery Point Objective): Hasta 24 horas (si se ejecuta diariamente) o según la frecuencia del schedule.
    * RTO (Recovery Time Objective): Menos de 2 horas (dependiendo del tamaño de la backup y la infraestructura).
    */
-  @Cron(this.cronTime, { timeZone: this.timezone })
+  @Cron(CRON_TIME, { timeZone: TIMEZONE })
   async runDailyBackup() {
     if (process.env.BACKUP_ENABLED !== 'true') {
       this.logger.debug('Backups deshabilitados (BACKUP_ENABLED != true)')

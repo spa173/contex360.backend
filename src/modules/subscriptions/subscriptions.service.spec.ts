@@ -8,10 +8,15 @@ const prismaMock = {
   },
 } as any;
 
+const usageServiceMock = {
+  getUsage: vi.fn(),
+  recordUsage: vi.fn(),
+} as any;
+
 describe('SubscriptionsService', () => {
   it('should return starter limits if subscription is not found', async () => {
     prismaMock.subscription.findUnique.mockResolvedValue(null);
-    const service = new SubscriptionsService(prismaMock);
+    const service = new SubscriptionsService(prismaMock, usageServiceMock);
     const result = await service.getCurrentSubscription('tenant-id');
 
     expect(result.planType).toBe('starter');
@@ -26,7 +31,7 @@ describe('SubscriptionsService', () => {
       trialEndsAt: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000),
       invoicesThisMonth: 10,
     });
-    const service = new SubscriptionsService(prismaMock);
+    const service = new SubscriptionsService(prismaMock, usageServiceMock);
     const result = await service.getCurrentSubscription('tenant-id');
 
     expect(result.planType).toBe('pyme');

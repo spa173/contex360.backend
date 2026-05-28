@@ -25,13 +25,13 @@ export class BackupRestoreService {
     }
 
     const files = require('fs').readdirSync(backupDir)
-      .filter(f => f.startsWith('contex360-backup-') && f.endsWith('.sql.gz'))
-      .map(f => ({
+      .filter((f: string) => f.startsWith('contex360-backup-') && f.endsWith('.sql.gz'))
+      .map((f: string) => ({
         name: f,
         path: join(backupDir, f),
         time: require('fs').statSync(join(backupDir, f)).mtime.getTime(),
       }))
-      .sort((a, b) => b.time - a.time);
+      .sort((a: BackupFile, b: BackupFile) => b.time - a.time);
 
     return files;
   }
@@ -65,11 +65,12 @@ export class BackupRestoreService {
         message: `Successfully restored from backup: ${latestBackup.name}`,
         restoredFrom: latestBackup.name 
       };
-    } catch (error) {
-      this.logger.error(`Error restoring backup:`, error);
+    } catch (error: any) {
+      const err = error as Error;
+      this.logger.error(`Error restoring backup:`, err);
       return { 
         success: false, 
-        message: `Failed to restore backup: ${error.message}` 
+        message: `Failed to restore backup: ${err.message}` 
       };
     }
   }
@@ -104,11 +105,12 @@ export class BackupRestoreService {
         success: true, 
         message: `Successfully restored from backup: ${backupName}` 
       };
-    } catch (error) {
-      this.logger.error(`Error restoring backup by name:`, error);
+    } catch (error: any) {
+      const err = error as Error;
+      this.logger.error(`Error restoring backup by name:`, err);
       return { 
         success: false, 
-        message: `Failed to restore backup: ${error.message}` 
+        message: `Failed to restore backup: ${err.message}` 
       };
     }
   }
@@ -123,14 +125,15 @@ export class BackupRestoreService {
 
     // Drop the target database if it exists (to avoid conflicts)
     try {
-      this.dropDatabase(targetDbName);
-    } catch (error) {
+      await this.dropDatabase(targetDbName);
+    } catch (error: any) {
       // Ignore if the database doesn't exist
-      this.logger.warn(`Target database ${targetDbName} does not exist or could not be dropped:`, error.message);
+      const err = error as Error;
+      this.logger.warn(`Target database ${targetDbName} does not exist or could not be dropped: ${err.message}`);
     }
 
     // Create the target database
-    this.createDatabase(targetDbName);
+    await this.createDatabase(targetDbName);
 
     // Restore the backup
     await this.restoreBackup(backupPath, targetDbName);
@@ -141,10 +144,10 @@ export class BackupRestoreService {
   /**
    * Create a PostgreSQL database.
    */
-  private createDatabase(dbName: string): void {
+  private async createDatabase(dbName: string): Promise<void> {
     // Extract connection details from DATABASE_URL to connect to default postgres DB
     const { URL } = await import('node:url');
-    const dbUrl = new URL(process.env.DATABASE_URL);
+    const dbUrl = new URL(process.env.DATABASE_URL || '');
     
     // Connect to default postgres database to create new database
     const dbNameToConnect = dbUrl.pathname.substring(1); // Remove leading slash
@@ -157,10 +160,10 @@ export class BackupRestoreService {
   /**
    * Drop a PostgreSQL database.
    */
-  private dropDatabase(dbName: string): void {
+  private async dropDatabase(dbName: string): Promise<void> {
     // Extract connection details from DATABASE_URL to connect to default postgres DB
     const { URL } = await import('node:url');
-    const dbUrl = new URL(process.env.DATABASE_URL);
+    const dbUrl = new URL(process.env.DATABASE_URL || '');
     
     // Connect to default postgres database to drop database
     const dbNameToConnect = dbUrl.pathname.substring(1); // Remove leading slash
@@ -180,7 +183,7 @@ export class BackupRestoreService {
 
     // Extract connection details from DATABASE_URL
     const { URL } = await import('node:url');
-    const dbUrl = new URL(process.env.DATABASE_URL);
+    const dbUrl = new URL(process.env.DATABASE_URL || '');
     
     // We'll use gunzip to decompress and pipe to psql
     const { execFile } = await import('node:child_process');

@@ -280,6 +280,7 @@ describe('SubscriptionsController — exportData', () => {
       mockDianService as any,
       { generateInvoicePdf: vi.fn().mockResolvedValue('tmp/test.pdf') } as any,
       { sendInvoiceEmail: vi.fn().mockResolvedValue(undefined) } as any,
+      { getAvailableCurrencies: vi.fn().mockReturnValue([]) } as any,
     )
   })
 
@@ -362,6 +363,7 @@ describe('SubscriptionsController — deleteAccount', () => {
       mockDianService as any,
       { generateInvoicePdf: vi.fn().mockResolvedValue('tmp/test.pdf') } as any,
       { sendInvoiceEmail: vi.fn().mockResolvedValue(undefined) } as any,
+      { getAvailableCurrencies: vi.fn().mockReturnValue([]) } as any,
     )
   })
 

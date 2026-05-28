@@ -333,7 +333,7 @@ function stripHtmlTags(str: string): string {
 
 @Injectable()
 export class AiService {
-  private readonly groq: Groq
+  private readonly groq!: Groq
 
   constructor(
     private readonly prisma: PrismaService,
