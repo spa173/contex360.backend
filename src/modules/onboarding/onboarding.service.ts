@@ -57,7 +57,7 @@ export class OnboardingService {
         },
       })
 
-      const hashConsent = require('crypto').randomBytes(16).toString('hex')
+      const generateHash = () => require('crypto').randomBytes(16).toString('hex')
 
       if (dto.acceptedTerms) {
         await tx.consentimiento.create({
@@ -67,7 +67,7 @@ export class OnboardingService {
             type: 'terminosCondiciones',
             estado: 'aceptado',
             fecha: new Date(),
-            hashConsent,
+            hashConsent: generateHash(),
           },
         })
       }
@@ -80,7 +80,7 @@ export class OnboardingService {
             type: 'politicaPrivacidad',
             estado: 'aceptado',
             fecha: new Date(),
-            hashConsent,
+            hashConsent: generateHash(),
           },
         })
       }
@@ -93,7 +93,7 @@ export class OnboardingService {
             type: 'procesamientoDatos',
             estado: 'aceptado',
             fecha: new Date(),
-            hashConsent,
+            hashConsent: generateHash(),
           },
         })
       }
