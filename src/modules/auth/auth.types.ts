@@ -36,6 +36,7 @@ export interface TotpRequiredResponse {
 export interface PasswordExpiredResponse {
   ok: false
   requiresPasswordChange: true
+  resetToken?: string
   message: string
 }
 
@@ -46,6 +47,21 @@ export interface PrivacyConsentRequiredResponse {
 }
 
 export class ChangePasswordDto {
+  @Transform(({ value }) => String(value || '').trim())
+  @IsString()
+  currentPassword!: string
+
+  @Transform(({ value }) => String(value || '').trim())
+  @IsString()
+  @MinLength(8, { message: 'La nueva contrasena debe tener al menos 8 caracteres.' })
+  newPassword!: string
+}
+
+export class ChangeExpiredPasswordDto {
+  @Transform(({ value }) => String(value || '').trim())
+  @IsString({ message: 'El token de restablecimiento es requerido.' })
+  resetToken!: string
+
   @Transform(({ value }) => String(value || '').trim())
   @IsString()
   currentPassword!: string
