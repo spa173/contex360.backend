@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { execSync } from 'node:child_process';
-import { existsSync, readdirSync, statSync, unlinkSync } from 'node:fs';
+import { existsSync, readdirSync, statSync, unlinkSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createGzip, createGunzip } from 'node:zlib';
+import { createGzip, createGunzip, gunzipSync } from 'node:zlib';
 import { createWriteStream, createReadStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { PrismaService } from '../database/prisma.service';
@@ -118,13 +118,8 @@ export class BackupVerificationService {
   private async restoreBackup(backupPath: string, dbName: string): Promise<void> {
     this.logger.log(`Restoring backup ${backupPath} to database ${dbName}`);
 
-    // We'll use gunzip to decompress and pipe to psql
-    const { execFile } = await import('node:child_process');
-    // Note: We are using execSync for simplicity, but for large files we might want to use streams.
-    // However, the backup file is already compressed and we are in a controlled environment.
-
-    // First, decompress and then pipe to psql
-    const gunzip = execSync('gunzip', { input: require('node:fs').readFileSync(backupPath), maxBuffer: 1024 * 1024 * 50 }); // 50MB buffer
+    // Decompress and restore in one pipeline
+    const gunzip = gunzipSync(readFileSync(backupPath));
 
     // Now restore to the database
     const dbUrl = process.env.DATABASE_URL || '';

@@ -185,13 +185,8 @@ export class BackupRestoreService {
     const { URL } = await import('node:url');
     const dbUrl = new URL(process.env.DATABASE_URL || '');
     
-    // We'll use gunzip to decompress and pipe to psql
-    const { execFile } = await import('node:child_process');
     // Decompress and restore in one pipeline
-    const gunzip = require('child_process').execSync('gunzip', { 
-      input: require('node:fs').readFileSync(backupPath), 
-      maxBuffer: 1024 * 1024 * 50 // 50MB buffer
-    });
+    const gunzip = require('node:zlib').gunzipSync(require('node:fs').readFileSync(backupPath));
 
     // Now restore to the database
     const restoreCommand = `psql "host=${dbUrl.hostname} port=${dbUrl.port || 5432} dbname=${dbName} user=${dbUrl.username}"`;
