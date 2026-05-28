@@ -1,6 +1,6 @@
 import { UserStatus } from '@prisma/client'
 import { Transform } from 'class-transformer'
-import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator'
+import { IsEmail, IsOptional, IsString, MinLength, IsBoolean } from 'class-validator'
 import { OAuthProvider } from './auth.constants'
 
 export class LoginRequestDto {
@@ -19,9 +19,11 @@ export class LoginRequestDto {
   totpCode?: string
 
   @IsOptional()
+  @IsBoolean()
   rememberMe?: boolean
 
   @IsOptional()
+  @IsBoolean()
   privacyAccepted?: boolean
 }
 
