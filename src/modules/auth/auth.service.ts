@@ -133,8 +133,15 @@ export class AuthService {
     }
 
     const passwordExpired = this.isPasswordExpired(user.securityProfile)
-    if (passwordExpired) {
-      return { ok: false, requiresPasswordChange: true, message: 'Tu contrasena ha expirado. Debes establecer una nueva para continuar.' }
+    const resetRequired = user.securityProfile?.passwordResetRequired === true
+    if (passwordExpired || resetRequired) {
+      return {
+        ok: false,
+        requiresPasswordChange: true,
+        message: resetRequired
+          ? 'Es obligatorio cambiar tu contraseña por solicitud del administrador o primer inicio de sesión.'
+          : 'Tu contrasena ha expirado. Debes establecer una nueva para continuar.',
+      }
     }
 
     if (credentials.privacyAccepted) {
@@ -706,11 +713,13 @@ export class AuthService {
           userId,
           passwordUpdatedAt: new Date(),
           passwordHistory: updatedHistory,
+          passwordResetRequired: false,
           trustedFingerprints: [],
         },
         update: { 
           passwordUpdatedAt: new Date(),
           passwordHistory: updatedHistory,
+          passwordResetRequired: false,
         },
       }),
     ])
