@@ -10,6 +10,7 @@ import { AnalyticsService } from '../analytics/analytics.service'
 import { NotificationService } from '../notification/notification.service'
 import { UsageService } from '../usage/usage.service'
 import { PERSONAL_ASSISTANT_PROMPT } from './ai.prompts'
+import { GeminiService } from './gemini.service'
 
 const MODEL = 'llama-3.1-8b-instant'
 
@@ -341,6 +342,7 @@ export class AiService {
     private readonly notification: NotificationService,
     private readonly config: ConfigService,
     private readonly usageService: UsageService,
+    private readonly gemini: GeminiService,
   ) {
     const apiKey = this.config.get<string>('GROQ_API_KEY')
     if (apiKey) {
@@ -395,52 +397,39 @@ export class AiService {
     const lowerMsg = message.toLowerCase()
     const isErpQuery = lowerMsg.includes('venta') || lowerMsg.includes('vendim') || lowerMsg.includes('factura') || lowerMsg.includes('inventario') || lowerMsg.includes('stock') || lowerMsg.includes('producto') || lowerMsg.includes('cliente') || lowerMsg.includes('proveedor') || lowerMsg.includes('cotiza') || lowerMsg.includes('compra') || lowerMsg.includes('tesoreria') || lowerMsg.includes('ingreso') || lowerMsg.includes('gasto') || lowerMsg.includes('empresa') || lowerMsg.includes('tenant') || lowerMsg.includes('balance') || lowerMsg.includes('cuanto') || lowerMsg.includes('cuales') || lowerMsg.includes('usuario') || lowerMsg.includes('colaborador') || lowerMsg.includes('empleado') || lowerMsg.includes('equipo') || lowerMsg.includes('persona')
 
+    const plan = isSystemOwner
+      ? 'enterprise'
+      : tenantId
+        ? (await this.prisma.subscription.findUnique({ where: { tenantId } }))?.planType?.toLowerCase() || 'starter'
+        : 'starter'
+
     let extractedVisionContent = ''
     let extractedAttachmentContent = ''
-    if (attachment && attachment.startsWith('data:image/')) {
+
+    if (attachment) {
+      if (plan === 'starter') {
+        return {
+          role: 'assistant',
+          content: 'La carga y análisis de archivos (OCR) no está disponible en el Plan Starter. Por favor, solicita un Upgrade al Plan Pyme o Enterprise para disfrutar de esta funcionalidad inteligente documental.',
+        }
+      }
+
+      const geminiModel = plan === 'enterprise' ? 'gemini-2.5-pro' : 'gemini-2.5-flash'
+
       try {
-        const visionRes = await this.groq.chat.completions.create({
-          model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-          messages: [
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: 'Realiza un análisis OCR y visual exhaustivo de esta imagen. Si es una factura, recibo o documento contable, extrae con precisión: Proveedor/Emisor, NIT/RUT, Fecha de emisión, Monto Total, Subtotal, Impuestos (IVA), y lista de items o productos. Si es una captura de pantalla o interfaz web, describe exactamente qué ventanas, botones y textos aparecen.' },
-                { type: 'image_url', image_url: { url: attachment } }
-              ]
-            }
-          ],
-          max_tokens: 1024,
-        })
-        extractedVisionContent = visionRes.choices[0]?.message?.content || ''
+        const systemPromptOCR = 'Realiza un análisis OCR y visual exhaustivo de este documento. Si es una factura, recibo o documento contable, extrae con precisión: Proveedor/Emisor, NIT/RUT, Fecha de emisión, Monto Total, Subtotal, Impuestos (IVA), y lista de items o productos. Si es una captura de pantalla o interfaz web, describe exactamente qué ventanas, botones y textos aparecen.'
+        
+        extractedVisionContent = await this.gemini.generateText(
+          geminiModel,
+          systemPromptOCR,
+          'Analiza este archivo adjunto en detalle para extraer su contenido contable o textual relevante.',
+          [],
+          attachment
+        )
       } catch (e: any) {
-        console.error('Groq Llama 4 Scout vision error:', safeLogFragment(e?.response?.data || e.message || e))
-        extractedVisionContent = '[ERROR DE VISIÓN OCR]: No se pudo completar el análisis OCR de la imagen en los servidores de IA.'
+        console.error(`Gemini OCR error (${geminiModel}):`, safeLogFragment(e?.message || e))
+        extractedVisionContent = '[ERROR DE VISIÓN OCR]: No se pudo completar el análisis OCR del archivo en los servidores de Gemini.'
       }
-    } else if (attachment && attachment.startsWith('data:application/pdf')) {
-      try {
-        const base64Data = attachment.split(',')[1]
-        if (base64Data) {
-          const buffer = Buffer.from(base64Data, 'base64')
-          const pdfData = await pdfParse(buffer)
-          extractedAttachmentContent = pdfData.text ? `[CONTENIDO TEXTUAL DEL DOCUMENTO PDF ADJUNTO]:\n"""\n${pdfData.text.slice(0, 4000)}\n"""` : ''
-        }
-      } catch (err) {
-        console.error('Error parsing PDF:', safeLogFragment(err))
-        extractedAttachmentContent = '[AVISO]: Documento PDF recibido e indexado correctamente en los registros.'
-      }
-    } else if (attachment && attachment.startsWith('data:text/')) {
-      try {
-        const base64Data = attachment.split(',')[1]
-        if (base64Data) {
-          const textData = Buffer.from(base64Data, 'base64').toString('utf-8')
-          extractedAttachmentContent = `[CONTENIDO DEL ARCHIVO DE TEXTO/CSV ADJUNTO]:\n"""\n${textData.slice(0, 4000)}\n"""`
-        }
-      } catch (err) {
-        extractedAttachmentContent = '[AVISO]: Archivo de texto/CSV indexado.'
-      }
-    } else if (attachment) {
-      extractedAttachmentContent = '[AVISO]: Archivo estructurado recibido e indexado en el repositorio de auditoría.'
     }
 
     const upperMsgFileName = message.toUpperCase()
