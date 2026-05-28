@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { Cron, CronExpression } from '@nestjs/schedule'
+import { Cron } from '@nestjs/schedule'
 import { execSync } from 'node:child_process'
 
 const CRON_TIME = process.env.BACKUP_SCHEDULE || '0 2 * * *';
@@ -49,12 +49,19 @@ export class BackupScheduler {
    * This is a simplified implementation for common schedules.
    */
   private calculateRPOHours(): number {
+    if (this.cronTime.includes('*/5')) {
+      return 0.08 // 5 minutes
+    }
+    if (this.cronTime.includes('0 */1') || this.cronTime.includes('0 * * * *')) {
+      return 1 // Hourly backup
+    }
+    if (this.cronTime.includes('0 0 * * 0') || this.cronTime.includes('0 0 * * 7')) {
+      return 168 // Weekly backup
+    }
     // If the cron expression contains a fixed hour and minute (like '0 2 * * *'), it's daily.
-    // We'll assume daily for simplicity. In a more advanced implementation, we could parse the cron.
-    if (this.cronTime.match(/^\d+\s+\d+\s+\*\s+\*\s+\*$/)) {
+    if (/^\d+\s+\d+\s+\*\s+\*\s+\*$/.test(this.cronTime)) {
       return 24 // Daily backup
     }
-    // For other schedules, we could compute, but we'll return a default.
-    return 24
+    return 12 // Default fallback if not matched
   }
 }

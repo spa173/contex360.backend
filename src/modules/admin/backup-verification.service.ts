@@ -124,7 +124,7 @@ export class BackupVerificationService {
     // However, the backup file is already compressed and we are in a controlled environment.
 
     // First, decompress and then pipe to psql
-    const gunzip = execSync('gunzip', { input: require('fs').readFileSync(backupPath), maxBuffer: 1024 * 1024 * 50 }); // 50MB buffer
+    const gunzip = execSync('gunzip', { input: require('node:fs').readFileSync(backupPath), maxBuffer: 1024 * 1024 * 50 }); // 50MB buffer
 
     // Now restore to the database
     const dbUrl = process.env.DATABASE_URL || '';
@@ -148,9 +148,9 @@ export class BackupVerificationService {
 
     try {
       const result = execSync(command, { encoding: 'utf8', maxBuffer: 1024 * 1024 });
-      const count = parseInt(result.trim(), 10);
+      const count = Number.parseInt(result.trim(), 10);
       this.logger.log(`Verification query result: ${count} tenants found`);
-      return !isNaN(count); // If we got a number, the query succeeded
+      return !Number.isNaN(count); // If we got a number, the query succeeded
     } catch (error: any) {
       const err = error as Error;
       this.logger.error(`Verification query failed:`, err);

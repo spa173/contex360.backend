@@ -107,7 +107,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
   private isPrismaError(error: unknown): error is PrismaClientError {
     if (typeof error !== 'object' || error === null) return false
     const err = error as PrismaClientError
-    return typeof err.code === 'string' && err.code.startsWith('P') && !isNaN(Number(err.code.slice(1)))
+    return typeof err.code === 'string' && err.code.startsWith('P') && !Number.isNaN(Number(err.code.slice(1)))
   }
 
   private handlePrismaError(error: PrismaClientError) {
