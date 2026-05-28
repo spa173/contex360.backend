@@ -7,10 +7,13 @@ const envPath = path.join(__dirname, '../.env')
 if (fs.existsSync(envPath)) {
   const envContent = fs.readFileSync(envPath, 'utf-8')
   for (const line of envContent.split('\n')) {
-    const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/)
-    if (match) {
-      const key = match[1]
-      let value = match[2] || ''
+    const trimmedLine = line.trim()
+    if (!trimmedLine || trimmedLine.startsWith('#')) continue
+
+    const eqIndex = trimmedLine.indexOf('=')
+    if (eqIndex !== -1) {
+      const key = trimmedLine.substring(0, eqIndex).trim()
+      let value = trimmedLine.substring(eqIndex + 1).trim()
       if (value.startsWith('"') && value.endsWith('"')) {
         value = value.substring(1, value.length - 1)
       } else if (value.startsWith("'") && value.endsWith("'")) {
