@@ -31,4 +31,16 @@ export class OnboardingCompletionDto {
   @IsString()
   @IsIn(['comercio', 'servicios', 'industria', 'tecnologia', 'salud', 'educacion', 'construccion', 'otro'])
   sector?: string
+
+  @ApiPropertyOptional({ description: 'Acepta términos y condiciones', example: true })
+  @IsOptional()
+  acceptedTerms?: boolean
+
+  @ApiPropertyOptional({ description: 'Acepta política de privacidad', example: true })
+  @IsOptional()
+  acceptedPrivacy?: boolean
+
+  @ApiPropertyOptional({ description: 'Acepta procesamiento de datos', example: true })
+  @IsOptional()
+  acceptedDataProcessing?: boolean
 }
