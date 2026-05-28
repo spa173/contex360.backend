@@ -18,7 +18,7 @@ const BASE_URL = __ENV.BASE_URL || 'http://localhost:3001'
 
 const credentials = {
   email: __ENV.TEST_EMAIL || 'test@contex360.com',
-  password: __ENV.TEST_PASSWORD || 'TestPassword123!',
+  password: __ENV.TEST_PASSWORD || '',
 }
 
 export default function () {
