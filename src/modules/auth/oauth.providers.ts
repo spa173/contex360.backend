@@ -36,7 +36,11 @@ function env(name: string, fallback = '') {
 }
 
 function normalizeUrl(value: string) {
-  return value.replace(/\/+$/, '')
+  let url = value
+  while (url.endsWith('/')) {
+    url = url.slice(0, -1)
+  }
+  return url
 }
 
 const TRUSTED_OAUTH_HOSTS = new Set([
