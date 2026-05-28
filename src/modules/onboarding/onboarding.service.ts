@@ -29,17 +29,60 @@ export class OnboardingService {
       throw new NotFoundException('Membership not found for user')
     }
 
-    await this.prisma.tenant.update({
-      where: { id: membership.tenantId },
-      data: {
-        name: dto.companyName || undefined,
-        address: dto.address || undefined,
-        phone: dto.phone || undefined,
-        nit: dto.nit || undefined,
-        sector: dto.sector || undefined,
-        city: dto.city || undefined,
-        onboardingCompletedAt: new Date(),
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.tenant.update({
+        where: { id: membership.tenantId },
+        data: {
+          name: dto.companyName || undefined,
+          address: dto.address || undefined,
+          phone: dto.phone || undefined,
+          nit: dto.nit || undefined,
+          sector: dto.sector || undefined,
+          city: dto.city || undefined,
+          onboardingCompletedAt: new Date(),
+        },
+      })
+
+      const hashConsent = require('crypto').randomBytes(16).toString('hex')
+
+      if (dto.acceptedTerms) {
+        await tx.consentimiento.create({
+          data: {
+            tenantId: membership.tenantId,
+            userId,
+            type: 'terminosCondiciones',
+            estado: 'aceptado',
+            fecha: new Date(),
+            hashConsent,
+          },
+        })
+      }
+
+      if (dto.acceptedPrivacy) {
+        await tx.consentimiento.create({
+          data: {
+            tenantId: membership.tenantId,
+            userId,
+            type: 'politicaPrivacidad',
+            estado: 'aceptado',
+            fecha: new Date(),
+            hashConsent,
+          },
+        })
+      }
+
+      if (dto.acceptedDataProcessing) {
+        await tx.consentimiento.create({
+          data: {
+            tenantId: membership.tenantId,
+            userId,
+            type: 'procesamientoDatos',
+            estado: 'aceptado',
+            fecha: new Date(),
+            hashConsent,
+          },
+        })
+      }
     })
 
     return { success: true }
