@@ -6,6 +6,20 @@ export class OnboardingService {
   constructor(private prisma: PrismaService) {}
 
   async getStatus(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isSystemOwner: true },
+    })
+
+    if (!user) {
+      throw new NotFoundException('User not found')
+    }
+
+    // System owners don't require onboarding
+    if (user.isSystemOwner) {
+      return { completed: true }
+    }
+
     const membership = await this.prisma.membership.findFirst({
       where: { userId },
       select: { tenant: { select: { onboardingCompletedAt: true } } },
