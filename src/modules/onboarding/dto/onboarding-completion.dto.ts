@@ -32,6 +32,12 @@ export class OnboardingCompletionDto {
   @IsIn(['comercio', 'servicios', 'industria', 'tecnologia', 'salud', 'educacion', 'construccion', 'otro'])
   sector?: string
 
+  @ApiPropertyOptional({ description: 'Tipo de plan seleccionado', example: 'pyme', enum: ['starter', 'pyme', 'enterprise'] })
+  @IsOptional()
+  @IsString()
+  @IsIn(['starter', 'pyme', 'enterprise'])
+  planType?: string
+
   @ApiPropertyOptional({ description: 'Acepta términos y condiciones', example: true })
   @IsOptional()
   acceptedTerms?: boolean

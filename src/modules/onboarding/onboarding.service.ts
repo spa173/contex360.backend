@@ -97,6 +97,21 @@ export class OnboardingService {
           },
         })
       }
+
+      // Create or update subscription with selected plan
+      if (dto.planType) {
+        await tx.subscription.upsert({
+          where: { tenantId: membership.tenantId },
+          create: {
+            tenantId: membership.tenantId,
+            planType: dto.planType,
+            active: true,
+          },
+          update: {
+            planType: dto.planType,
+          },
+        })
+      }
     })
 
     return { success: true }
