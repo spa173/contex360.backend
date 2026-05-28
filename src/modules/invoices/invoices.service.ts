@@ -70,7 +70,6 @@ export class InvoicesService {
       productId: string
       quantity: number
       unitPrice: number
-      taxRate: number
     }[]
   }) {
     return this.prisma.$transaction(async (tx) => {
@@ -81,9 +80,7 @@ export class InvoicesService {
       // 1.5 Generate invoice number
       const invoiceNumber = await this.generateInvoiceNumber(tx, tenantId)
 
-      const subtotal = data.items.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0)
-      const taxTotal = data.items.reduce((acc, item) => acc + (item.unitPrice * item.quantity * (item.taxRate / 100)), 0)
-      const total = subtotal + taxTotal
+// Subtotal, taxTotal and total are calculated after fetching product tax rates
 
       // 2. Calculate due date
       const issuedAt = new Date()
@@ -97,6 +94,17 @@ export class InvoicesService {
         if (!product) throw new NotFoundException(`Producto ${item.productId} no encontrado`)
         productMap.set(item.productId, product)
       }
+
+      // Compute subtotal and taxes based on product tax rates
+      const subtotal = data.items.reduce((acc, item) => {
+        return acc + (item.unitPrice * item.quantity);
+      }, 0);
+      const taxTotal = data.items.reduce((acc, item) => {
+        const product = productMap.get(item.productId);
+        const taxRate = Number(product.taxRate || 0);
+        return acc + (item.unitPrice * item.quantity * (taxRate / 100));
+      }, 0);
+      const total = subtotal + taxTotal;
 
       const invoice = await tx.invoice.create({
         data: {
@@ -120,9 +128,9 @@ export class InvoicesService {
                 quantity: item.quantity,
                 unitPrice: item.unitPrice,
                 unitCost: Number(product.cost),
-                taxRate: item.taxRate,
+                taxRate: Number(product.taxRate || 0),
                 subtotal: item.unitPrice * item.quantity,
-                taxAmount: item.unitPrice * item.quantity * (item.taxRate / 100),
+                taxAmount: item.unitPrice * item.quantity * (Number(product.taxRate || 0) / 100),
               }
             }),
           },
