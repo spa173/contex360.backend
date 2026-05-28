@@ -73,7 +73,7 @@ describe('InvoicesService', () => {
     it('should create an invoice and ledger entry if stock is sufficient', async () => {
       mockPrisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1', allowNegativeStock: false })
       mockPrisma.tenant.update.mockResolvedValue({ invoicePrefix: 'FE', lastInvoiceNumber: 1 })
-      mockPrisma.product.findUnique.mockResolvedValue({ id: 'prod-1', name: 'Service', isInventoriable: false, cost: 0 })
+      mockPrisma.product.findUnique.mockResolvedValue({ id: 'prod-1', name: 'Service', isInventoriable: false, cost: 0, taxRate: 19 })
       
       mockPrisma.invoice.create.mockResolvedValue({
         id: 'inv-1',
@@ -126,5 +126,31 @@ describe('InvoicesService', () => {
       await expect(service.create('tenant-1', dto)).rejects.toThrow('Stock insuficiente para Physical Item. Disponible: 1, Requerido: 5')
       expect(mockLedger.create).not.toHaveBeenCalled()
     })
-  })
+       })
+
+    it('should create invoice when taxRate omitted in DTO (uses product taxRate)', async () => {
+      mockPrisma.tenant.findUnique.mockResolvedValue({ id: 'tenant-1', allowNegativeStock: false });
+      mockPrisma.tenant.update.mockResolvedValue({ invoicePrefix: 'FE', lastInvoiceNumber: 1 });
+      mockPrisma.product.findUnique.mockResolvedValue({ id: 'prod-1', name: 'Service', isInventoriable: false, cost: 0, taxRate: 19 });
+      mockPrisma.invoice.create.mockResolvedValue({
+        id: 'inv-2',
+        number: 'FE-000002',
+        status: InvoiceStatus.emitted,
+      });
+      mockPrisma.thirdParty.findUnique.mockResolvedValue({ name: 'Client A' });
+
+      const dto = {
+        clientId: 'cli-1',
+        paymentTermDays: 30,
+        items: [{ productId: 'prod-1', quantity: 2, unitPrice: 1000 }],
+      };
+
+      const result = await service.create('tenant-1', dto);
+      expect(result.id).toBe('inv-2');
+      expect(mockLedger.create).toHaveBeenCalledWith(
+        'tenant-1',
+        expect.objectContaining({ amount: 2380, referenceType: 'invoice', referenceId: 'inv-2' }),
+        mockPrisma,
+      );
+    });
 })
