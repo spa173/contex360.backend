@@ -478,88 +478,27 @@ export class DianService {
     const soapAction = environment === 'test' ? 'SendTestSetAsync' : 'SendBillSync'
 
     try {
-      const client = await soap.createClientAsync(wsdl, {
-        endpoint,
-        forceSoap12Headers: true,
-      })
-
-      client.setSecurity(new soap.WSSecurityCert(
-        certificate.privateKeyPem,
-        certificate.certificatePem,
+      const { result, trackId, accepted } = await this.executeDianSoapCall(
+        certificate,
         tenant.dianCertificatePassword || '',
-        {
-          hasTimeStamp: true,
-          signatureAlgorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
-          digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
-          signerOptions: {
-            prefix: 'ds',
-          },
-        },
-      ))
-
-      client.addSoapHeader(
-        {
-          'wsa:Action': buildSoapAction(soapAction),
-          'wsa:To': endpoint,
-          'wsa:MessageID': `urn:uuid:${randomUUID()}`,
-        },
-        undefined,
-        'wsa',
-        'http://www.w3.org/2005/08/addressing',
+        endpoint,
+        wsdl,
+        soapAction,
+        xmlFileName,
+        contentFile,
+        tenant.dianTestSetId || undefined,
       )
 
-      const request = environment === 'test'
-        ? {
-            fileName: xmlFileName,
-            contentFile,
-            testSetId: tenant.dianTestSetId,
-          }
-        : {
-            fileName: xmlFileName,
-            contentFile,
-          }
-
-      const method = environment === 'test' ? 'SendTestSetAsync' : 'SendBillSync'
-      const [soapResult] = await client[`${method}Async`](request)
-      const result = soapResult?.[`${method}Result`] || soapResult
-      const trackId = result?.ZipKey || result?.XmlDocumentKey || result?.TrackId || null
-      const accepted = Boolean(result?.IsValid) || Boolean(trackId)
-
       if (!issuerConfig || issuerConfig.entityType === 'invoice') {
-        await this.appendDianTimeline(invoice.tenantId, invoice.invoiceId, {
-          type: 'dian',
-          action: 'send',
-          at: new Date().toISOString(),
-          status: accepted ? 'sent' : 'rejected',
-          message: accepted
-            ? 'Factura transmitida a DIAN.'
-            : 'DIAN devolvió un rechazo o no generó seguimiento.',
+        await this.persistInvoiceAndNotify(
+          invoice,
+          accepted,
           cufe,
-          trackId: trackId || undefined,
+          trackId,
           xmlFileName,
-          response: safeJson(result ?? {}),
-        })
-
-        await this.prisma.invoice.update({
-          where: { id: invoice.invoiceId },
-          data: {
-            status: accepted ? InvoiceStatus.sent : InvoiceStatus.emitted,
-          },
-        })
-
-        if (accepted) {
-          this.invoiceMailer.sendInvoice({
-            tenantId: invoice.tenantId,
-            invoiceId: invoice.invoiceId,
-            clientEmail: invoice.client.email,
-            clientName: invoice.client.name,
-            invoiceNumber: invoice.number,
-            cufe,
-            total: invoice.total,
-            xmlFileName,
-            xmlBase64: contentFile,
-          }).catch(err => this.logger.error('Error in background invoice mailing', err));
-        }
+          contentFile,
+          result,
+        )
       }
 
       return {
@@ -919,6 +858,112 @@ export class DianService {
         timeline: timeline as unknown as Prisma.InputJsonValue,
       },
     })
+  }
+
+  private async executeDianSoapCall(
+    certificate: ReturnType<typeof extractCertificatePem>,
+    password: string,
+    endpoint: string,
+    wsdl: string,
+    soapAction: string,
+    xmlFileName: string,
+    contentFile: string,
+    dianTestSetId?: string,
+  ): Promise<{ result: any; trackId: string | null; accepted: boolean }> {
+    const client = await soap.createClientAsync(wsdl, {
+      endpoint,
+      forceSoap12Headers: true,
+    })
+
+    client.setSecurity(new soap.WSSecurityCert(
+      certificate.privateKeyPem,
+      certificate.certificatePem,
+      password,
+      {
+        hasTimeStamp: true,
+        signatureAlgorithm: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256',
+        digestAlgorithm: 'http://www.w3.org/2001/04/xmlenc#sha256',
+        signerOptions: {
+          prefix: 'ds',
+        },
+      },
+    ))
+
+    client.addSoapHeader(
+      {
+        'wsa:Action': buildSoapAction(soapAction),
+        'wsa:To': endpoint,
+        'wsa:MessageID': `urn:uuid:${randomUUID()}`,
+      },
+      undefined,
+      'wsa',
+      'http://www.w3.org/2005/08/addressing',
+    )
+
+    const isTest = soapAction === 'SendTestSetAsync'
+    const request = isTest
+      ? {
+          fileName: xmlFileName,
+          contentFile,
+          testSetId: dianTestSetId,
+        }
+      : {
+          fileName: xmlFileName,
+          contentFile,
+        }
+
+    const method = isTest ? 'SendTestSetAsync' : 'SendBillSync'
+    const [soapResult] = await client[`${method}Async`](request)
+    const result = soapResult?.[`${method}Result`] || soapResult
+    const trackId = result?.ZipKey || result?.XmlDocumentKey || result?.TrackId || null
+    const accepted = Boolean(result?.IsValid) || Boolean(trackId)
+
+    return { result, trackId, accepted }
+  }
+
+  private async persistInvoiceAndNotify(
+    invoice: DianInvoicePayload,
+    accepted: boolean,
+    cufe: string,
+    trackId: string | null,
+    xmlFileName: string,
+    contentFile: string,
+    result: any,
+  ): Promise<void> {
+    await this.appendDianTimeline(invoice.tenantId, invoice.invoiceId, {
+      type: 'dian',
+      action: 'send',
+      at: new Date().toISOString(),
+      status: accepted ? 'sent' : 'rejected',
+      message: accepted
+        ? 'Factura transmitida a DIAN.'
+        : 'DIAN devolvió un rechazo o no generó seguimiento.',
+      cufe,
+      trackId: trackId || undefined,
+      xmlFileName,
+      response: safeJson(result ?? {}),
+    })
+
+    await this.prisma.invoice.update({
+      where: { id: invoice.invoiceId },
+      data: {
+        status: accepted ? InvoiceStatus.sent : InvoiceStatus.emitted,
+      },
+    })
+
+    if (accepted) {
+      this.invoiceMailer.sendInvoice({
+        tenantId: invoice.tenantId,
+        invoiceId: invoice.invoiceId,
+        clientEmail: invoice.client.email,
+        clientName: invoice.client.name,
+        invoiceNumber: invoice.number,
+        cufe,
+        total: invoice.total,
+        xmlFileName,
+        xmlBase64: contentFile,
+      }).catch(err => this.logger.error('Error in background invoice mailing', err))
+    }
   }
 
   private extractSoapErrors(result: any): string[] {
