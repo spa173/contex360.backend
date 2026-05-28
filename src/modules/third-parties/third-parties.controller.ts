@@ -1,4 +1,6 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from '@nestjs/common'
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards, UseInterceptors, UploadedFile, MaxFileSizeValidator, ParseFilePipe, FileTypeValidator } from '@nestjs/common'
+import { FileInterceptor } from '@nestjs/platform-express'
+import { ApiConsumes, ApiBody } from '@nestjs/swagger'
 import { ThirdPartiesService } from './third-parties.service'
 import { Permissions } from '../auth/permissions.decorator'
 import { AuthGuard } from '../auth/auth.guard'
@@ -31,6 +33,25 @@ export class ThirdPartiesController {
     @Body() data: CreateThirdPartyDto,
   ) {
     return this.thirdPartiesService.create(tenantId, data)
+  }
+
+  @Post('import')
+  @Permissions('manage_third_parties')
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({ schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } } })
+  async import(
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }),
+          new FileTypeValidator({ fileType: /(text\/csv|application\/vnd\.ms-excel)/ }),
+        ],
+      }),
+    ) file: any,
+    @TenantId() tenantId: string,
+  ) {
+    return this.thirdPartiesService.importCsv(tenantId, file.buffer)
   }
 
   @Put(':id')

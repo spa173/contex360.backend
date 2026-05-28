@@ -176,9 +176,11 @@ export interface AuthResponseSnapshot {
   user: PublicUserSnapshot
   session: PublicSessionSnapshot
   activeTenantId: string
+  onboardingCompleted?: boolean
   accessibleTenants: PublicTenantSnapshot[]
   subscription?: PublicSubscriptionSnapshot
   memberships: {
+    userId: string
     tenantId: string
     role: string
     permissions: string[]

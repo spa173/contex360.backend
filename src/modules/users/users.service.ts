@@ -2,6 +2,7 @@ import { Injectable, BadRequestException, NotFoundException, ForbiddenException 
 import { PrismaService } from '../database/prisma.service'
 import * as crypto from 'node:crypto'
 import * as bcrypt from 'bcryptjs'
+import { NotificationService } from '../notification/notification.service'
 
 export interface CreateUserDto {
   name: string
@@ -14,7 +15,10 @@ export interface CreateUserDto {
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationService: NotificationService,
+  ) {}
 
   generateTemporaryPassword(): string {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%&*?'
@@ -217,10 +221,13 @@ export class UsersService {
     return { ok: true, message: `${result.count} sesiones revocadas en el tenant.` }
   }
 
-  async upsertMembership(payload: { userId: string; tenantId: string; role: string }) {
+  async upsertMembership(payload: { userId: string; tenantId: string; role: string; actorUserId?: string; actorEmail?: string }) {
     const existing = await this.prisma.membership.findUnique({
       where: { userId_tenantId: { userId: payload.userId, tenantId: payload.tenantId } },
     })
+    const isUpdate = !!existing
+    const previousRole = isUpdate ? existing.role : null
+
     if (existing) {
       await this.prisma.membership.update({
         where: { userId_tenantId: { userId: payload.userId, tenantId: payload.tenantId } },
@@ -229,6 +236,37 @@ export class UsersService {
     } else {
       await this.prisma.membership.create({ data: payload })
     }
+
+    const actorName = payload.actorEmail || 'Sistema'
+    const now = new Date()
+    await this.prisma.auditEvent.create({
+      data: {
+        tenantId: payload.tenantId,
+        entity: 'membership',
+        action: isUpdate ? 'Cambio de Rol' : 'Asignación de Acceso',
+        description: isUpdate
+          ? `Rol de usuario ${payload.userId} cambiado de "${previousRole}" a "${payload.role}" por ${actorName}.`
+          : `Acceso asignado al usuario ${payload.userId} con rol "${payload.role}" por ${actorName}.`,
+        actor: actorName,
+        actorUserId: payload.actorUserId,
+        severity: 'warning',
+      },
+    })
+
+    // Notificar al usuario afectado
+    if (isUpdate) {
+      const targetUser = await this.prisma.user.findUnique({ where: { id: payload.userId } })
+      if (targetUser) {
+        const time = now.toLocaleString('es-CO', { timeZone: 'America/Bogota' })
+        const bodyHtml = this.notificationService.buildRoleChangedHtml(previousRole || 'N/A', payload.role, actorName, time)
+        setImmediate(() => {
+          this.notificationService
+            .sendSecurityAlert(targetUser.email, targetUser.name, 'Tus permisos han sido actualizados — Contex360', bodyHtml)
+            .catch((err) => console.error('Error enviando alerta de cambio de rol:', err))
+        })
+      }
+    }
+
     return { ok: true, message: 'Membresía actualizada.' }
   }
 

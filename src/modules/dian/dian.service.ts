@@ -44,7 +44,7 @@ export interface DianResponse {
 
 type DianEnvironment = 'test' | 'production'
 
-type TenantDianConfig = Prisma.TenantGetPayload<{
+export type TenantDianConfig = Prisma.TenantGetPayload<{
   select: {
     id: true
     name: true
@@ -410,8 +410,14 @@ export class DianService {
     private readonly invoiceMailer: InvoiceMailerService
   ) {}
 
-  async sendInvoice(invoice: DianInvoicePayload): Promise<DianResponse> {
-    const tenant = await this.prisma.tenant.findUnique({
+  async sendInvoice(
+    invoice: DianInvoicePayload,
+    issuerConfig?: {
+      tenant: TenantDianConfig
+      entityType: 'invoice' | 'subscription'
+    },
+  ): Promise<DianResponse> {
+    const tenant = issuerConfig?.tenant ?? await this.prisma.tenant.findUnique({
       where: { id: invoice.tenantId },
       select: {
         id: true,
@@ -438,13 +444,15 @@ export class DianService {
       throw new BadRequestException('Tenant no encontrado')
     }
 
-    const validation = await this.validateConfig(invoice.tenantId)
-    if (!validation.valid) {
-      return {
-        success: false,
-        status: 'rejected',
-        message: 'La configuración DIAN está incompleta.',
-        errors: validation.errors,
+    if (!issuerConfig) {
+      const validation = await this.validateConfig(invoice.tenantId)
+      if (!validation.valid) {
+        return {
+          success: false,
+          status: 'rejected',
+          message: 'La configuración DIAN está incompleta.',
+          errors: validation.errors,
+        }
       }
     }
 
@@ -506,39 +514,41 @@ export class DianService {
       const trackId = result?.ZipKey || result?.XmlDocumentKey || result?.TrackId || null
       const accepted = Boolean(result?.IsValid) || Boolean(trackId)
 
-      await this.appendDianTimeline(invoice.tenantId, invoice.invoiceId, {
-        type: 'dian',
-        action: 'send',
-        at: new Date().toISOString(),
-        status: accepted ? 'sent' : 'rejected',
-        message: accepted
-          ? 'Factura transmitida a DIAN.'
-          : 'DIAN devolvió un rechazo o no generó seguimiento.',
-        cufe,
-        trackId: trackId || undefined,
-        xmlFileName,
-        response: safeJson(result ?? {}),
-      })
-
-      await this.prisma.invoice.update({
-        where: { id: invoice.invoiceId },
-        data: {
-          status: accepted ? InvoiceStatus.sent : InvoiceStatus.emitted,
-        },
-      })
-
-      if (accepted) {
-        this.invoiceMailer.sendInvoice({
-          tenantId: invoice.tenantId,
-          invoiceId: invoice.invoiceId,
-          clientEmail: invoice.client.email,
-          clientName: invoice.client.name,
-          invoiceNumber: invoice.number,
+      if (!issuerConfig || issuerConfig.entityType === 'invoice') {
+        await this.appendDianTimeline(invoice.tenantId, invoice.invoiceId, {
+          type: 'dian',
+          action: 'send',
+          at: new Date().toISOString(),
+          status: accepted ? 'sent' : 'rejected',
+          message: accepted
+            ? 'Factura transmitida a DIAN.'
+            : 'DIAN devolvió un rechazo o no generó seguimiento.',
           cufe,
-          total: invoice.total,
+          trackId: trackId || undefined,
           xmlFileName,
-          xmlBase64: contentFile,
-        }).catch(err => this.logger.error('Error in background invoice mailing', err));
+          response: safeJson(result ?? {}),
+        })
+
+        await this.prisma.invoice.update({
+          where: { id: invoice.invoiceId },
+          data: {
+            status: accepted ? InvoiceStatus.sent : InvoiceStatus.emitted,
+          },
+        })
+
+        if (accepted) {
+          this.invoiceMailer.sendInvoice({
+            tenantId: invoice.tenantId,
+            invoiceId: invoice.invoiceId,
+            clientEmail: invoice.client.email,
+            clientName: invoice.client.name,
+            invoiceNumber: invoice.number,
+            cufe,
+            total: invoice.total,
+            xmlFileName,
+            xmlBase64: contentFile,
+          }).catch(err => this.logger.error('Error in background invoice mailing', err));
+        }
       }
 
       return {
@@ -558,16 +568,18 @@ export class DianService {
     } catch (error) {
       this.logger.error(`Error enviando factura ${invoice.number} a DIAN`, error instanceof Error ? error.stack : undefined)
 
-      await this.appendDianTimeline(invoice.tenantId, invoice.invoiceId, {
-        type: 'dian',
-        action: 'send',
-        at: new Date().toISOString(),
-        status: 'rejected',
-        message: error instanceof Error ? error.message : 'Error desconocido al transmitir a DIAN.',
-        cufe,
-        xmlFileName,
-        response: { error: error instanceof Error ? error.message : String(error) },
-      })
+      if (!issuerConfig || issuerConfig.entityType === 'invoice') {
+        await this.appendDianTimeline(invoice.tenantId, invoice.invoiceId, {
+          type: 'dian',
+          action: 'send',
+          at: new Date().toISOString(),
+          status: 'rejected',
+          message: error instanceof Error ? error.message : 'Error desconocido al transmitir a DIAN.',
+          cufe,
+          xmlFileName,
+          response: { error: error instanceof Error ? error.message : String(error) },
+        })
+      }
 
       return {
         success: false,

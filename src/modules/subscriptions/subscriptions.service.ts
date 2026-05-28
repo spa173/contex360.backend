@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
 import { PLANS } from './plans.config';
+import { Prisma } from '@prisma/client';
+import { UsageService } from '../usage/usage.service';
 
 function resolvePlanKey(planType?: string | null) {
   const normalized = String(planType || 'starter').toLowerCase();
@@ -15,7 +17,10 @@ function toLimitSnapshot(planKey: 'starter' | 'pyme' | 'enterprise') {
 export class SubscriptionsService {
   private readonly logger = new Logger(SubscriptionsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly usageService: UsageService,
+  ) {}
 
   async getCurrentSubscription(tenantId: string) {
     const subscription = await this.prisma.subscription.findUnique({
@@ -67,28 +72,20 @@ export class SubscriptionsService {
       where: { tenantId },
     });
 
-    const usersCount = await this.prisma.membership.count({
-      where: { tenantId },
-    });
+    const planKey = subscription
+      ? resolvePlanKey(subscription.planType)
+      : 'starter';
+    const limits = toLimitSnapshot(planKey);
 
-    if (!subscription) {
-      return {
-        planType: 'starter',
-        invoicesThisMonth: 0,
-        usersCount,
-        renewsAt: null,
-        limits: PLANS.starter,
-      };
-    }
-
-    const planKey = resolvePlanKey(subscription.planType);
+    const featureUsage = await this.usageService.getUsage(tenantId);
 
     return {
-      planType: subscription.planType,
-      invoicesThisMonth: subscription.invoicesThisMonth,
-      usersCount,
-      renewsAt: subscription.renewsAt,
-      limits: toLimitSnapshot(planKey),
+      planType: planKey,
+      invoicesThisMonth: subscription?.invoicesThisMonth ?? 0,
+      limits,
+      usage: featureUsage.usage,
+      overages: featureUsage.overages,
+      renewsAt: subscription?.renewsAt ?? null,
     };
   }
 
@@ -97,8 +94,10 @@ export class SubscriptionsService {
     planType: 'starter' | 'pyme' | 'enterprise',
     billing: 'monthly' | 'annual',
     renewsAt: Date,
+    tx?: Prisma.TransactionClient,
   ) {
-    return this.prisma.subscription.upsert({
+    const client = tx || this.prisma;
+    return client.subscription.upsert({
       where: { tenantId },
       create: {
         tenantId,
@@ -162,8 +161,10 @@ export class SubscriptionsService {
     billing?: string;
     description?: string;
     paidAt?: Date;
-  }) {
-    return this.prisma.payment.create({
+    processedAt?: Date,
+  }, tx?: Prisma.TransactionClient) {
+    const client = tx || this.prisma;
+    return client.payment.create({
       data: {
         tenantId: data.tenantId,
         subscriptionId: data.subscriptionId,
@@ -176,6 +177,7 @@ export class SubscriptionsService {
         billing: data.billing,
         description: data.description,
         paidAt: data.paidAt,
+        processedAt: data.processedAt,
       },
     });
   }
@@ -192,10 +194,11 @@ export class SubscriptionsService {
     periodStart: Date;
     periodEnd: Date;
     paidAt?: Date;
-  }) {
+  }, tx?: Prisma.TransactionClient) {
+    const client = tx || this.prisma;
     const invoiceNumber = await this.generateInvoiceNumber(data.tenantId);
 
-    return this.prisma.subscriptionInvoice.create({
+    return client.subscriptionInvoice.create({
       data: {
         tenantId: data.tenantId,
         subscriptionId: data.subscriptionId,

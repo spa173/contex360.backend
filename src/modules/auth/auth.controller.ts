@@ -1,4 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query, Req, Res, UnauthorizedException, UseGuards } from '@nestjs/common'
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger'
+import { SkipOnboardingCheck } from '../../common/decorators/skip-onboarding.decorator'
 import { Throttle } from '@nestjs/throttler'
 import { IsString, MaxLength, MinLength } from 'class-validator'
 import type { CookieOptions, Response } from 'express'
@@ -133,7 +135,9 @@ function redirectToFrontend(response: Response, redirectTo: string) {
   response.redirect(redirectTo || getDefaultFrontendCallbackUrl())
 }
 
+@ApiTags('Auth')
 @Controller('auth')
+@SkipOnboardingCheck()
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
@@ -142,6 +146,9 @@ export class AuthController {
 
   @Throttle({ short: { ttl: 60000, limit: 30 } })
   @Post('login')
+  @ApiOperation({ summary: 'Iniciar sesión con email y contraseña' })
+  @ApiResponse({ status: 200, description: 'Sesión iniciada correctamente' })
+  @ApiResponse({ status: 401, description: 'Credenciales inválidas' })
   async login(
     @Body() body: LoginRequestDto,
     @Req() request: AuthenticatedRequest,

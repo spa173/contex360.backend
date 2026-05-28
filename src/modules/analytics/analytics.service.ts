@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common'
 import { randomInt } from 'node:crypto'
 import { PrismaService } from '../database/prisma.service'
+import { UsageService } from '../usage/usage.service'
 
 @Injectable()
 export class AnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly usageService: UsageService,
+  ) {}
 
   async getDashboardKpis(tenantId: string, from?: string, to?: string) {
     const whereInvoice: any = { tenantId, status: 'emitted' };
@@ -347,7 +351,7 @@ export class AnalyticsService {
 
     const selected = mockInvoices[randomInt(mockInvoices.length)];
 
-    return this.prisma.ocrRun.create({
+    const result = await this.prisma.ocrRun.create({
       data: {
         tenantId,
         source: selected.source,
@@ -356,6 +360,9 @@ export class AnalyticsService {
         fields: selected.fields,
       },
     });
+
+    this.usageService.recordUsage(tenantId, 'ocr_run');
+    return result;
   }
 
   async approveOcrRun(tenantId: string, id: string) {
@@ -422,6 +429,7 @@ export class AnalyticsService {
       where: { id },
     });
 
+    this.usageService.recordUsage(tenantId, 'ocr_run');
     return purchase;
   }
 

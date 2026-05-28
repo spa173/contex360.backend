@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import * as nodemailer from 'nodemailer'
+import { PrismaService } from '../database/prisma.service'
 
 function safeLogFragment(value: unknown) {
   const message = value instanceof Error
@@ -28,7 +29,10 @@ export class NotificationService {
   private readonly logger = new Logger(NotificationService.name)
   private transporter: nodemailer.Transporter | null = null
 
-  constructor(private readonly config: ConfigService) {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly prisma: PrismaService,
+  ) {
     const host = this.config.get<string>('SMTP_HOST')
     if (host) {
       const port = this.config.get<number>('SMTP_PORT') ?? 587
@@ -141,6 +145,263 @@ export class NotificationService {
     } catch (err: any) {
       this.logger.error(`Error enviando email genérico a ${safeLogFragment(to)}: ${safeLogFragment(err)}`)
       throw new Error(`No se pudo enviar el correo: ${safeLogFragment(err)}`)
+    }
+  }
+
+  // ── Transactional Emails ───────────────────────────────────────────
+
+  async sendOnboardingWelcomeEmail(tenantId: string): Promise<void> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        name: true,
+        memberships: {
+          include: { user: { select: { email: true, name: true } } },
+        },
+      },
+    })
+    if (!tenant) return
+
+    const admin = tenant.memberships.find(
+      (m) => m.role === 'Administrador' || m.role === 'owner',
+    )?.user
+    if (!admin?.email) return
+
+    const subject = `¡Bienvenido a Contex360, ${tenant.name}!`
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <h1 style="color: #18181B; font-size: 24px; margin: 0;">¡Bienvenido a Contex360!</h1>
+          <p style="color: #71717A; font-size: 14px; margin-top: 8px;">Tu empresa <strong>${tenant.name}</strong> está lista</p>
+        </div>
+        <div style="background: #F4F4F5; border-radius: 12px; padding: 20px; margin: 24px 0;">
+          <h3 style="color: #18181B; font-size: 16px; margin: 0 0 12px 0;">Próximos pasos:</h3>
+          <ol style="color: #71717A; font-size: 14px; line-height: 1.8; padding-left: 20px;">
+            <li>Configura tu integración DIAN para facturación electrónica</li>
+            <li>Crea tu primer producto o servicio</li>
+            <li>Invita a tu equipo de trabajo</li>
+            <li>Explora el dashboard y módulos disponibles</li>
+          </ol>
+        </div>
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}" style="display: inline-block; padding: 14px 28px; background: #2563EB; color: white; text-decoration: none; border-radius: 10px; font-weight: 600; font-size: 14px;">
+            Ir al Dashboard
+          </a>
+        </div>
+        <p style="color: #A1A1AA; font-size: 12px; text-align: center; border-top: 1px solid #E4E4E7; padding-top: 16px;">
+          Si tienes dudas, responde a este correo o visita nuestro centro de ayuda.<br/>
+          &copy; 2026 Contex360
+        </p>
+      </div>`
+
+    await this.sendHtmlEmail(admin.email, subject, html)
+    this.logger.log(`Onboarding welcome email sent to ${admin.email} for tenant ${tenantId}`)
+  }
+
+  async sendPaymentConfirmationEmail(tenantId: string, payment: any): Promise<void> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        name: true,
+        memberships: {
+          include: { user: { select: { email: true, name: true } } },
+        },
+      },
+    })
+    if (!tenant) return
+
+    const admin = tenant.memberships.find(
+      (m) => m.role === 'Administrador' || m.role === 'owner',
+    )?.user
+    if (!admin?.email) return
+
+    const subject = `Pago confirmado — ${payment.planType} (${payment.billing})`
+    const amountFormatted = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' }).format(payment.amount)
+    const dateFormatted = payment.paidAt ? new Date(payment.paidAt).toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' }) : new Date().toLocaleDateString('es-CO')
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <div style="width: 64px; height: 64px; background: #D1FAE5; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+            <span style="font-size: 32px;">✅</span>
+          </div>
+          <h1 style="color: #18181B; font-size: 22px; margin: 0;">¡Pago confirmado!</h1>
+          <p style="color: #71717A; font-size: 14px; margin-top: 4px;">${dateFormatted}</p>
+        </div>
+        <div style="background: #F4F4F5; border-radius: 12px; padding: 20px; margin: 24px 0;">
+          <h3 style="color: #18181B; font-size: 14px; margin: 0 0 12px 0;">Detalles del pago</h3>
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <tr><td style="color: #71717A; padding: 4px 0;">Plan</td><td style="text-align: right; font-weight: 600;">${payment.planType}</td></tr>
+            <tr><td style="color: #71717A; padding: 4px 0;">Ciclo</td><td style="text-align: right; font-weight: 600;">${payment.billing === 'annual' ? 'Anual' : 'Mensual'}</td></tr>
+            <tr><td style="color: #71717A; padding: 4px 0;">Monto</td><td style="text-align: right; font-weight: 600; font-size: 16px; color: #059669;">${amountFormatted}</td></tr>
+            <tr><td style="color: #71717A; padding: 4px 0;">Método</td><td style="text-align: right; font-weight: 600; text-transform: capitalize;">${payment.paymentMethod || 'Tarjeta'}</td></tr>
+          </table>
+        </div>
+        <p style="color: #A1A1AA; font-size: 12px; text-align: center; border-top: 1px solid #E4E4E7; padding-top: 16px;">
+          Recibirás la factura electrónica en este correo.<br/>
+          &copy; 2026 Contex360
+        </p>
+      </div>`
+
+    await this.sendHtmlEmail(admin.email, subject, html)
+    this.logger.log(`Payment confirmation sent to ${admin.email} for tenant ${tenantId}`)
+  }
+
+  async sendRenewalReminderEmail(tenantId: string, daysUntilRenewal: number): Promise<void> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        name: true,
+        memberships: {
+          include: { user: { select: { email: true, name: true } } },
+        },
+      },
+    })
+    if (!tenant) return
+
+    const admin = tenant.memberships.find(
+      (m) => m.role === 'Administrador' || m.role === 'owner',
+    )?.user
+    if (!admin?.email) return
+
+    const subject = `Tu suscripción Contex360 se renueva en ${daysUntilRenewal} días`
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <h1 style="color: #18181B; font-size: 22px; margin: 0;">Recordatorio de renovación</h1>
+          <p style="color: #71717A; font-size: 14px; margin-top: 4px;">${tenant.name}</p>
+        </div>
+        <div style="background: #FEF3C7; border-radius: 12px; padding: 20px; margin: 24px 0; border: 1px solid #FDE68A;">
+          <p style="color: #92400E; font-size: 14px; margin: 0; text-align: center;">
+            Tu suscripción se renovará automáticamente en <strong>${daysUntilRenewal} días</strong>.
+          </p>
+        </div>
+        <p style="color: #71717A; font-size: 14px; line-height: 1.6;">
+          Para evitar interrupciones en el servicio, asegúrate de que tu método de pago esté actualizado.
+          Puedes revisar y actualizar tu información de facturación desde el panel de administración.
+        </p>
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/subscription" style="display: inline-block; padding: 14px 28px; background: #2563EB; color: white; text-decoration: none; border-radius: 10px; font-weight: 600; font-size: 14px;">
+            Gestionar suscripción
+          </a>
+        </div>
+        <p style="color: #A1A1AA; font-size: 12px; text-align: center; border-top: 1px solid #E4E4E7; padding-top: 16px;">
+          &copy; 2026 Contex360
+        </p>
+      </div>`
+
+    await this.sendHtmlEmail(admin.email, subject, html)
+    this.logger.log(`Renewal reminder sent to ${admin.email} for tenant ${tenantId} (${daysUntilRenewal} days)`)
+  }
+
+  async sendPaymentFailedEmail(tenantId: string, payment: any): Promise<void> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        name: true,
+        memberships: {
+          include: { user: { select: { email: true, name: true } } },
+        },
+      },
+    })
+    if (!tenant) return
+
+    const admin = tenant.memberships.find(
+      (m) => m.role === 'Administrador' || m.role === 'owner',
+    )?.user
+    if (!admin?.email) return
+
+    const amountFormatted = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP' }).format(payment.amount || 0)
+    const subject = `⚠️ Pago fallido — ${tenant.name}`
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <div style="width: 64px; height: 64px; background: #FEE2E2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+            <span style="font-size: 32px;">⚠️</span>
+          </div>
+          <h1 style="color: #DC2626; font-size: 22px; margin: 0;">Pago no procesado</h1>
+          <p style="color: #71717A; font-size: 14px; margin-top: 4px;">${tenant.name}</p>
+        </div>
+        <div style="background: #FEF2F2; border-radius: 12px; padding: 20px; margin: 24px 0; border: 1px solid #FECACA;">
+          <p style="color: #991B1B; font-size: 14px; margin: 0 0 12px 0;">
+            No pudimos procesar el pago de tu suscripción por <strong>${amountFormatted}</strong>.
+          </p>
+          <p style="color: #991B1B; font-size: 14px; margin: 0;">
+            Para evitar la suspensión del servicio, actualiza tu método de pago o intenta nuevamente.
+          </p>
+        </div>
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/subscription" style="display: inline-block; padding: 14px 28px; background: #2563EB; color: white; text-decoration: none; border-radius: 10px; font-weight: 600; font-size: 14px;">
+            Actualizar método de pago
+          </a>
+        </div>
+        <p style="color: #A1A1AA; font-size: 12px; text-align: center; border-top: 1px solid #E4E4E7; padding-top: 16px;">
+          &copy; 2026 Contex360
+        </p>
+      </div>`
+
+    await this.sendHtmlEmail(admin.email, subject, html)
+    this.logger.log(`Payment failed email sent to ${admin.email} for tenant ${tenantId}`)
+  }
+
+  async sendSubscriptionExpiredEmail(tenantId: string): Promise<void> {
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: {
+        name: true,
+        memberships: {
+          include: { user: { select: { email: true, name: true } } },
+        },
+      },
+    })
+    if (!tenant) return
+
+    const admin = tenant.memberships.find(
+      (m) => m.role === 'Administrador' || m.role === 'owner',
+    )?.user
+    if (!admin?.email) return
+
+    const subject = `Tu suscripción Contex360 ha expirado`
+    const html = `
+      <div style="font-family: Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <div style="width: 64px; height: 64px; background: #FEE2E2; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+            <span style="font-size: 32px;">🔒</span>
+          </div>
+          <h1 style="color: #DC2626; font-size: 22px; margin: 0;">Suscripción expirada</h1>
+          <p style="color: #71717A; font-size: 14px; margin-top: 4px;">${tenant.name}</p>
+        </div>
+        <div style="background: #FEF2F2; border-radius: 12px; padding: 20px; margin: 24px 0; border: 1px solid #FECACA;">
+          <p style="color: #991B1B; font-size: 14px; margin: 0;">
+            Tu suscripción ha expirado. Algunas funcionalidades pueden estar limitadas.
+            Para recuperar el acceso completo, renueva tu plan desde el panel de administración.
+          </p>
+        </div>
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}/pricing" style="display: inline-block; padding: 14px 28px; background: #2563EB; color: white; text-decoration: none; border-radius: 10px; font-weight: 600; font-size: 14px;">
+            Renovar plan
+          </a>
+        </div>
+        <p style="color: #A1A1AA; font-size: 12px; text-align: center; border-top: 1px solid #E4E4E7; padding-top: 16px;">
+          &copy; 2026 Contex360
+        </p>
+      </div>`
+
+    await this.sendHtmlEmail(admin.email, subject, html)
+    this.logger.log(`Subscription expired email sent to ${admin.email} for tenant ${tenantId}`)
+  }
+
+  private async sendHtmlEmail(to: string, subject: string, html: string): Promise<void> {
+    if (!this.transporter) {
+      this.logger.warn(`Email not sent (no transporter): ${subject} -> ${to}`)
+      return
+    }
+    const from = this.config.get<string>('SMTP_FROM') ?? 'no-reply@contex360.com'
+    try {
+      await this.transporter.sendMail({ from: `"Contex360" <${from}>`, to, subject, html })
+    } catch (err) {
+      this.logger.error(`Error sending email to ${to}: ${subject}: ${safeLogFragment(err)}`)
     }
   }
 
@@ -319,5 +580,106 @@ export class NotificationService {
   </div>
 </body>
 </html>`
+  }
+
+  async sendSecurityAlert(to: string, name: string, subject: string, bodyHtml: string): Promise<void> {
+    const html = `
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8" /></head>
+<body style="font-family:sans-serif;background:#f8fafc;color:#1e293b;padding:32px;">
+  <div style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px;border:1px solid #e2e8f0;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);">
+    <div style="text-align:center;margin-bottom:24px;">
+      <h1 style="color:#2563eb;margin:0;">Contex360</h1>
+      <p style="color:#64748b;font-size:14px;">Notificación de seguridad</p>
+    </div>
+    <h2 style="color:#1e293b;margin-top:0;">Hola, ${name}</h2>
+    ${bodyHtml}
+    <hr style="border:0;border-top:1px solid #e2e8f0;margin:32px 0;" />
+    <p style="color:#94a3b8;font-size:12px;text-align:center;line-height:1.5;">
+      Si no reconoces esta actividad, contacta a nuestro equipo de soporte inmediatamente.<br/>
+      &copy; 2026 Contex360 · Sistema de Gestión Financiera
+    </p>
+  </div>
+</body>
+</html>`
+
+    if (!this.transporter) {
+      this.logger.warn(`SEGURIDAD (sin email): ${subject} | ${safeLogFragment(to)}`)
+      return
+    }
+
+    const from = this.config.get<string>('SMTP_FROM') ?? 'no-reply@contex360.com'
+
+    await this.transporter.sendMail({ from, to, subject, html }).catch((err) =>
+      this.logger.error(`Error enviando alerta de seguridad a ${safeLogFragment(to)}: ${safeLogFragment(err)}`),
+    )
+
+    this.logger.log(`Alerta de seguridad enviada a ${safeLogFragment(to)}: ${subject}`)
+  }
+
+  buildNewLoginHtml(device: string, browser: string, os: string, ip: string, location: string, time: string): string {
+    return `
+    <div style="background:#fff7ed;border-radius:8px;padding:20px;border:1px solid #fdba74;margin-bottom:20px;">
+      <p style="margin:0 0 12px 0;font-size:14px;color:#9a3412;"><strong>Nuevo inicio de sesión detectado</strong></p>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;color:#475569;">
+        <tr><td style="padding:4px 0;width:100px;">Dispositivo</td><td><strong>${device}</strong></td></tr>
+        <tr><td style="padding:4px 0;">Navegador</td><td><strong>${browser}</strong></td></tr>
+        <tr><td style="padding:4px 0;">Sistema</td><td><strong>${os}</strong></td></tr>
+        <tr><td style="padding:4px 0;">Dirección IP</td><td><strong>${ip}</strong></td></tr>
+        <tr><td style="padding:4px 0;">Ubicación</td><td><strong>${location}</strong></td></tr>
+        <tr><td style="padding:4px 0;">Fecha/Hora</td><td><strong>${time}</strong></td></tr>
+      </table>
+    </div>
+    <p style="color:#475569;font-size:15px;line-height:1.6;">Si fuiste tú, no necesitas hacer nada. Si no reconoces esta actividad, cambia tu contraseña inmediatamente y contacta a soporte.</p>`
+  }
+
+  buildPasswordChangedHtml(time: string, ip: string): string {
+    return `
+    <div style="background:#f0fdf4;border-radius:8px;padding:20px;border:1px solid #86efac;margin-bottom:20px;">
+      <p style="margin:0 0 12px 0;font-size:14px;color:#166534;"><strong>Contraseña actualizada</strong></p>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;color:#475569;">
+        <tr><td style="padding:4px 0;width:100px;">Fecha/Hora</td><td><strong>${time}</strong></td></tr>
+        <tr><td style="padding:4px 0;">Dirección IP</td><td><strong>${ip}</strong></td></tr>
+      </table>
+    </div>
+    <p style="color:#475569;font-size:15px;line-height:1.6;">La contraseña de tu cuenta ha sido cambiada exitosamente. Si realizaste este cambio, no necesitas hacer nada más.</p>
+    <div style="background:#fff7ed;border-radius:8px;padding:16px;border:1px solid #fdba74;margin-top:16px;">
+      <p style="margin:0;font-size:14px;color:#9a3412;"><strong>¿No solicitaste este cambio?</strong> Contacta a soporte inmediatamente para asegurar tu cuenta.</p>
+    </div>`
+  }
+
+  buildFailedLoginHtml(attempts: number, ip: string, time: string, locked: boolean): string {
+    const lockoutWarning = locked
+      ? `<div style="background:#fef2f2;border-radius:8px;padding:16px;border:1px solid #fca5a5;margin-top:16px;">
+          <p style="margin:0;font-size:14px;color:#991b1b;"><strong>Cuenta bloqueada temporalmente</strong> por superar el límite de intentos permitidos. Intenta de nuevo más tarde.</p>
+        </div>`
+      : ''
+
+    return `
+    <div style="background:#fef2f2;border-radius:8px;padding:20px;border:1px solid #fca5a5;margin-bottom:20px;">
+      <p style="margin:0 0 12px 0;font-size:14px;color:#991b1b;"><strong>Intento de inicio de sesión fallido</strong></p>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;color:#475569;">
+        <tr><td style="padding:4px 0;width:100px;">Intentos fallidos</td><td><strong>${attempts}</strong></td></tr>
+        <tr><td style="padding:4px 0;">Dirección IP</td><td><strong>${ip}</strong></td></tr>
+        <tr><td style="padding:4px 0;">Fecha/Hora</td><td><strong>${time}</strong></td></tr>
+      </table>
+    </div>
+    <p style="color:#475569;font-size:15px;line-height:1.6;">Alguien intentó iniciar sesión en tu cuenta con una contraseña incorrecta. Si fuiste tú, verifica que estás usando la contraseña correcta.</p>
+    ${lockoutWarning}`
+  }
+
+  buildRoleChangedHtml(previousRole: string, newRole: string, changedBy: string, time: string): string {
+    return `
+    <div style="background:#f0fdf4;border-radius:8px;padding:20px;border:1px solid #86efac;margin-bottom:20px;">
+      <p style="margin:0 0 12px 0;font-size:14px;color:#166534;"><strong>Rol de usuario actualizado</strong></p>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;color:#475569;">
+        <tr><td style="padding:4px 0;width:120px;">Rol anterior</td><td><strong>${previousRole}</strong></td></tr>
+        <tr><td style="padding:4px 0;">Rol nuevo</td><td><strong>${newRole}</strong></td></tr>
+        <tr><td style="padding:4px 0;">Modificado por</td><td><strong>${changedBy}</strong></td></tr>
+        <tr><td style="padding:4px 0;">Fecha/Hora</td><td><strong>${time}</strong></td></tr>
+      </table>
+    </div>
+    <p style="color:#475569;font-size:15px;line-height:1.6;">Los permisos de tu cuenta han sido actualizados. Algunas funcionalidades pueden haber cambiado.</p>`
   }
 }
