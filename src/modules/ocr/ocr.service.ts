@@ -141,7 +141,7 @@ export class OcrService {
         const result = await this.processor.processSync({
           ocrRunId:           ocrRun.id,
           tenantId,
-          fileBuffer:         file.buffer,
+          fileBuffer:         file.buffer,  // sync: buffer is still in scope (same request)
           mimeType:           detected.mime,
           autoCreatePurchase: dto.autoCreatePurchase ?? false,
         })
@@ -162,11 +162,14 @@ export class OcrService {
       }
     }
 
-    // Async processing (large files or sync failure fallback)
+    // Async processing (large files or sync failure fallback).
+    // Pass fileUrl instead of fileBuffer — the processor will re-fetch from storage.
+    // This releases the request-scoped buffer for GC after the HTTP response is sent,
+    // preventing 10-23MB allocations from living across retry delays (P0-3).
     this.processor.enqueue({
       ocrRunId:           ocrRun.id,
       tenantId,
-      fileBuffer:         file.buffer,
+      fileUrl:            fileUrl,
       mimeType:           detected.mime,
       autoCreatePurchase: dto.autoCreatePurchase ?? false,
     })
@@ -278,21 +281,18 @@ export class OcrService {
       )
     }
 
-    // Fetch file from storage for reprocessing
-    let fileBuffer: Buffer
-    try {
-      fileBuffer = await this.fetchFileBuffer(run.fileUrl)
-    } catch (e: any) {
+    // Pass fileUrl to the processor — it will re-fetch from storage.
+    // Avoids loading the file into service memory just to pass it to the processor (P0-3).
+    if (!run.fileUrl) {
       throw new BadRequestException(
-        'No se pudo recuperar el archivo original para reprocesar. ' +
-        'Sube el documento nuevamente.',
+        'No se encontró la URL del archivo para reprocesar. Sube el documento nuevamente.',
       )
     }
 
     this.processor.enqueue({
       ocrRunId:           run.id,
       tenantId,
-      fileBuffer,
+      fileUrl:            run.fileUrl,
       mimeType:           run.mimeType ?? 'application/pdf',
       autoCreatePurchase,
     })
@@ -410,16 +410,6 @@ export class OcrService {
     )
   }
 
-  private async fetchFileBuffer(url: string): Promise<Buffer> {
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(30_000),
-    })
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status} fetching file from storage`)
-    }
-    const ab = await response.arrayBuffer()
-    return Buffer.from(ab)
-  }
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────

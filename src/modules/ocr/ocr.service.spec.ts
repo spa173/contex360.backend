@@ -125,6 +125,25 @@ describe('OcrService', () => {
       expect(mockProcessor.processSync).not.toHaveBeenCalled()
     })
 
+    it('[P0-3] async path passes fileUrl (not fileBuffer) to processor — avoids RAM retention', async () => {
+      mockUsage.checkLimit.mockResolvedValue({ allowed: true, current: 0, limit: 50 })
+      mockStorage.upload.mockResolvedValue({ url: 'https://cdn.test/large.pdf' })
+      mockPrisma.ocrRun.create.mockResolvedValue({ id: 'ocr-large' })
+      mockPrisma.auditEvent.create.mockResolvedValue({})
+
+      const largeFile = makeFile({
+        size:   3 * 1024 * 1024,
+        buffer: Buffer.concat([makePdfBuffer(), Buffer.alloc(3 * 1024 * 1024 - 8)]),
+      })
+
+      await service.initiateUpload('tenant-1', 'user-1', largeFile, {})
+
+      const enqueuedJob = mockProcessor.enqueue.mock.calls[0][0]
+      // Async jobs must use fileUrl, not fileBuffer (P0-3: buffer GC after HTTP response)
+      expect(enqueuedJob.fileUrl).toBe('https://cdn.test/large.pdf')
+      expect(enqueuedJob.fileBuffer).toBeUndefined()
+    })
+
     it('rejects files exceeding 10MB', async () => {
       const oversized = makeFile({ size: 11 * 1024 * 1024 })
       await expect(

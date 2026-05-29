@@ -11,11 +11,19 @@ import {
 import type { OcrExtractedFields } from './ocr.types'
 
 export interface OcrJob {
-  ocrRunId: string
-  tenantId: string
-  fileBuffer: Buffer
-  mimeType: string
+  ocrRunId:  string
+  tenantId:  string
+  mimeType:  string
   autoCreatePurchase: boolean
+  /**
+   * For sync processing (small files ≤2MB): pass the buffer directly.
+   * For async processing (large files >2MB): pass fileUrl instead and
+   * the processor will re-fetch from storage, keeping the request-scoped
+   * buffer eligible for GC after the HTTP response is sent.
+   * Exactly one of fileBuffer or fileUrl must be provided.
+   */
+  fileBuffer?: Buffer
+  fileUrl?:   string
 }
 
 interface ProcessResult {
@@ -111,7 +119,7 @@ export class OcrProcessor {
   }
 
   private async executeJob(job: OcrJob): Promise<ProcessResult> {
-    const { ocrRunId, tenantId, fileBuffer, mimeType, autoCreatePurchase } = job
+    const { ocrRunId, tenantId, mimeType, autoCreatePurchase } = job
 
     // 1. Mark processing
     await this.prisma.ocrRun.update({
@@ -129,9 +137,23 @@ export class OcrProcessor {
         ? 'gemini-2.5-pro'
         : 'gemini-2.5-flash'
 
-    // 3. Convert buffer to base64 data URI for Gemini Vision
-    const base64 = fileBuffer.toString('base64')
+    // 3. Resolve file buffer — for async jobs the buffer is not held in the OcrJob
+    //    to avoid keeping large allocations alive across retry delays. Re-fetch from storage.
+    let fileBuffer: Buffer
+    if (job.fileBuffer) {
+      fileBuffer = job.fileBuffer
+    } else if (job.fileUrl) {
+      this.logger.log(`OcrRun ${ocrRunId}: re-fetching file from storage for async processing`)
+      fileBuffer = await this.fetchFileFromStorage(job.fileUrl)
+    } else {
+      throw new Error('OcrJob must provide either fileBuffer or fileUrl')
+    }
+
+    // Convert buffer to base64 data URI for Gemini Vision, then release the reference
+    // so the buffer is eligible for GC once base64 encoding is complete.
+    const base64  = fileBuffer.toString('base64')
     const dataUri = `data:${mimeType};base64,${base64}`
+    fileBuffer    = null as unknown as Buffer  // explicit null to hint GC
 
     // 4. Call Gemini with explicit timeout — prevents infinite hang on API unresponsiveness.
     // clearTimeout in finally ensures the pending timer is cancelled whether Gemini wins
@@ -282,6 +304,23 @@ export class OcrProcessor {
     } catch (e: any) {
       this.logger.error(`Could not mark OcrRun ${ocrRunId} as failed: ${e.message}`)
     }
+  }
+
+  private async fetchFileFromStorage(url: string): Promise<Buffer> {
+    const MAX_BYTES = 10 * 1024 * 1024  // 10MB — same as upload limit
+    const response = await fetch(url, { signal: AbortSignal.timeout(30_000) })
+    if (!response.ok) {
+      throw new Error(`Storage fetch failed (HTTP ${response.status}) for re-processing`)
+    }
+    const contentLength = response.headers.get('content-length')
+    if (contentLength && parseInt(contentLength) > MAX_BYTES) {
+      throw new Error(`File too large to re-fetch for processing: ${contentLength} bytes`)
+    }
+    const ab = await response.arrayBuffer()
+    if (ab.byteLength > MAX_BYTES) {
+      throw new Error(`Fetched file exceeds ${MAX_BYTES / 1024 / 1024}MB limit`)
+    }
+    return Buffer.from(ab)
   }
 }
 
