@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { Test } from '@nestjs/testing'
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common'
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common'
 import { OcrService } from './ocr.service'
 import { PrismaService } from '../database/prisma.service'
 import { UsageService } from '../usage/usage.service'
@@ -11,14 +11,15 @@ import { STORAGE_PROVIDER } from '../../common/storage/storage.interface'
 
 const mockPrisma = {
   ocrRun: {
-    create:    vi.fn(),
-    findFirst: vi.fn(),
-    findMany:  vi.fn(),
-    count:     vi.fn(),
-    update:    vi.fn(),
-    delete:    vi.fn(),
-    groupBy:   vi.fn(),
-    aggregate: vi.fn(),
+    create:     vi.fn(),
+    findFirst:  vi.fn(),
+    findMany:   vi.fn(),
+    count:      vi.fn(),
+    update:     vi.fn(),
+    updateMany: vi.fn(),  // used by retry() CAS lock
+    delete:     vi.fn(),
+    groupBy:    vi.fn(),
+    aggregate:  vi.fn(),
   },
   $transaction: vi.fn(),
   auditEvent: { create: vi.fn() },
@@ -304,6 +305,85 @@ describe('OcrService', () => {
       mockPrisma.ocrRun.findFirst.mockResolvedValue(null)
       await expect(service.retry('tenant-1', 'user-1', 'nonexistent'))
         .rejects.toThrow(NotFoundException)
+    })
+
+    // ── P1-1: retry() CAS optimistic lock tests ───────────────────────────
+
+    it('[P1-1] retry() uses updateMany CAS with status condition before enqueuing', async () => {
+      mockPrisma.ocrRun.findFirst.mockResolvedValue({
+        id: 'ocr-1', status: 'failed', retryCount: 1,
+        fileUrl: 'https://cdn.test/file.pdf', mimeType: 'application/pdf',
+      })
+      mockUsage.checkLimit.mockResolvedValue({ allowed: true, current: 5, limit: 50 })
+      mockPrisma.ocrRun.updateMany.mockResolvedValue({ count: 1 })  // lock acquired
+
+      await service.retry('tenant-1', 'user-1', 'ocr-1')
+
+      // CAS must use exact status from the read — prevents TOCTOU race
+      expect(mockPrisma.ocrRun.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id:       'ocr-1',
+            tenantId: 'tenant-1',
+            status:   'failed',  // exact status from the read
+          }),
+          data: expect.objectContaining({ status: 'pending' }),
+        }),
+      )
+    })
+
+    it('[P1-1] retry() throws ConflictException when CAS returns count=0 (concurrent retry)', async () => {
+      mockPrisma.ocrRun.findFirst.mockResolvedValue({
+        id: 'ocr-1', status: 'failed', retryCount: 0,
+        fileUrl: 'https://cdn.test/file.pdf', mimeType: 'application/pdf',
+      })
+      mockUsage.checkLimit.mockResolvedValue({ allowed: true, current: 0, limit: 50 })
+      // Another concurrent request already changed the status
+      mockPrisma.ocrRun.updateMany.mockResolvedValue({ count: 0 })
+
+      await expect(service.retry('tenant-1', 'user-1', 'ocr-1'))
+        .rejects.toThrow(ConflictException)
+    })
+
+    it('[P1-1] successful retry enqueues with fileUrl (not fileBuffer) after CAS', async () => {
+      mockPrisma.ocrRun.findFirst.mockResolvedValue({
+        id: 'ocr-1', status: 'failed', retryCount: 2,
+        fileUrl: 'https://cdn.test/file.pdf', mimeType: 'application/pdf',
+      })
+      mockUsage.checkLimit.mockResolvedValue({ allowed: true, current: 0, limit: 50 })
+      mockPrisma.ocrRun.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.retry('tenant-1', 'user-1', 'ocr-1', true)
+
+      expect(mockProcessor.enqueue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ocrRunId:           'ocr-1',
+          tenantId:           'tenant-1',
+          fileUrl:            'https://cdn.test/file.pdf',
+          autoCreatePurchase: true,
+        }),
+      )
+      // fileBuffer must NOT be passed (P0-3: no RAM retention)
+      const enqueuedJob = mockProcessor.enqueue.mock.calls[0][0]
+      expect(enqueuedJob.fileBuffer).toBeUndefined()
+    })
+
+    it('[P1-1] retry() enforces tenant isolation in CAS condition', async () => {
+      mockPrisma.ocrRun.findFirst.mockResolvedValue({
+        id: 'ocr-1', status: 'failed', retryCount: 0,
+        fileUrl: 'https://cdn.test/file.pdf', mimeType: 'application/pdf',
+      })
+      mockUsage.checkLimit.mockResolvedValue({ allowed: true, current: 0, limit: 50 })
+      mockPrisma.ocrRun.updateMany.mockResolvedValue({ count: 1 })
+
+      await service.retry('tenant-xyz', 'user-1', 'ocr-1')
+
+      // tenantId must be in the CAS WHERE clause — prevents cross-tenant lock acquisition
+      expect(mockPrisma.ocrRun.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ tenantId: 'tenant-xyz' }),
+        }),
+      )
     })
   })
 

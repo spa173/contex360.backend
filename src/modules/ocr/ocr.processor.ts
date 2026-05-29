@@ -4,7 +4,6 @@ import { GeminiService } from '../ai/gemini.service'
 import { UsageService } from '../usage/usage.service'
 import { OCR_EXTRACTION_PROMPT } from './ocr.prompts'
 import {
-  detectMimeFromBuffer,
   extractJsonFromLlmText,
   parseOcrLlmResponse,
 } from './ocr.schemas'
@@ -26,7 +25,7 @@ export interface OcrJob {
   fileUrl?:   string
 }
 
-interface ProcessResult {
+export interface ProcessResult {
   fields: OcrExtractedFields
   confidence: number
   purchaseId?: string
@@ -34,27 +33,31 @@ interface ProcessResult {
   warnings: string[]
 }
 
-const MAX_RETRIES          = 3
-const RETRY_DELAYS_MS      = [2_000, 5_000, 15_000]
-const MAX_RAW_LOG_CHARS    = 2_000
-const GEMINI_TIMEOUT_MS    = 90_000  // 90s — Gemini Vision typically responds in <15s for invoices
+const MAX_RETRIES       = 3
+const RETRY_DELAYS_MS   = [2_000, 5_000, 15_000]
+const MAX_RAW_LOG_CHARS = 2_000
+const GEMINI_TIMEOUT_MS = 90_000  // 90s — Gemini Vision typically responds in <15s for invoices
 
 /**
  * OcrProcessor — executes OCR extraction as a background job.
  *
- * Designed as a plain @Injectable() service so it can be called
- * fire-and-forget from OcrService, or trivially migrated to a
- * @nestjs/bull @Processor() when Bull is configured.
+ * ## Lock model (P1-1 — race condition elimination)
  *
- * Flow:
- *   1. UPDATE OcrRun status → 'processing'
- *   2. Convert buffer to base64 data URI
- *   3. Call Gemini Vision with structured invoice prompt
- *   4. Validate LLM JSON output with parseOcrLlmResponse()
- *   5. Optionally create Purchase draft
- *   6. UPDATE OcrRun status → 'processed' with extracted fields
- *   7. Record UsageRecord { feature: 'ocr_run' }
- *   8. On error: retry with exponential backoff up to MAX_RETRIES
+ * `acquireLock()` performs a Compare-And-Swap via `updateMany`:
+ *   - WHERE status IN ('pending', 'failed') → data { status: 'processing' }
+ *   - Returns count > 0 if the lock was acquired, 0 if another worker owns it.
+ *
+ * This ensures exactly-once execution per OcrRun regardless of how many
+ * concurrent callers invoke processSync() or enqueue() with the same ocrRunId.
+ *
+ * `processWithRetry()` acquires the lock ONCE (attempt 0). Internal retries
+ * (attempt 1, 2) reuse the same lock — they don't re-acquire it, because
+ * the status is already 'processing' (set by the first attempt).
+ *
+ * `processSync()` acquires the lock and ensures `markFailed()` is called on
+ * any exception, leaving the run in a clean 'failed' state so the async
+ * fallback path (in OcrService.initiateUpload) can enqueue it and the
+ * processor can re-acquire the lock from 'failed'.
  */
 @Injectable()
 export class OcrProcessor {
@@ -66,8 +69,12 @@ export class OcrProcessor {
     private readonly usageService: UsageService,
   ) {}
 
+  // ── Public entry points ───────────────────────────────────────────────────
+
   /**
    * Fire-and-forget entry point — call from OcrService without await.
+   * Acquires the CAS lock before processing; silently skips if another
+   * worker already owns the run (idempotent).
    */
   enqueue(job: OcrJob): void {
     this.processWithRetry(job, 0).catch((e) => {
@@ -79,17 +86,72 @@ export class OcrProcessor {
   }
 
   /**
-   * Synchronous entry point — awaited when file is small (≤ SYNC_THRESHOLD).
+   * Synchronous entry point — awaited inline when file is small (≤ SYNC_THRESHOLD).
+   *
+   * Acquires the CAS lock before processing. On failure, calls markFailed()
+   * to leave the run in a clean 'failed' state before re-throwing, so the
+   * async fallback path in initiateUpload() can enqueue it without a conflict.
+   *
+   * Throws if the lock cannot be acquired (run already owned or completed).
    */
   async processSync(job: OcrJob): Promise<ProcessResult> {
-    return this.executeJob(job)
+    const locked = await this.acquireLock(job.ocrRunId)
+    if (!locked) {
+      throw new Error(
+        `OcrRun ${job.ocrRunId} is already being processed or was completed — ` +
+        `skipping duplicate sync call`,
+      )
+    }
+    try {
+      return await this.executeJobCore(job)
+    } catch (e: any) {
+      // Ensure the run is in 'failed' (not stuck in 'processing') before re-throwing.
+      // This lets the initiateUpload() async fallback re-acquire the lock from 'failed'.
+      await this.markFailed(job.ocrRunId, e.message)
+      throw e
+    }
   }
 
-  // ── Private ────────────────────────────────────────────────────────────────
+  // ── Lock ──────────────────────────────────────────────────────────────────
+
+  /**
+   * CAS atomic lock: transitions status from 'pending' or 'failed' → 'processing'.
+   *
+   * Uses updateMany so the WHERE + UPDATE are evaluated atomically by PostgreSQL.
+   * Returns true if this caller now owns the lock; false if another worker does.
+   *
+   * Safe to call concurrently: PostgreSQL row-level locking ensures exactly one
+   * caller wins the race regardless of request timing.
+   */
+  private async acquireLock(ocrRunId: string): Promise<boolean> {
+    const result = await this.prisma.ocrRun.updateMany({
+      where: { id: ocrRunId, status: { in: ['pending', 'failed'] } },
+      data: {
+        status:              'processing',
+        processingStartedAt: new Date(),
+        errorMessage:        null,
+      },
+    })
+    return result.count > 0
+  }
+
+  // ── Internal execution ────────────────────────────────────────────────────
 
   private async processWithRetry(job: OcrJob, attempt: number): Promise<void> {
+    // Lock is acquired ONCE on the first attempt.
+    // Internal retries (attempt > 0) reuse the existing 'processing' lock.
+    if (attempt === 0) {
+      const locked = await this.acquireLock(job.ocrRunId)
+      if (!locked) {
+        this.logger.warn(
+          `OcrRun ${job.ocrRunId} already claimed by another worker — skipping (idempotent)`,
+        )
+        return  // not an error — idempotent skip
+      }
+    }
+
     try {
-      const result = await this.executeJob(job)
+      const result = await this.executeJobCore(job)
       this.logger.log(
         `OcrRun ${job.ocrRunId} processed: confidence=${result.confidence.toFixed(2)}, ` +
         `warnings=${result.warnings.length}`,
@@ -118,16 +180,15 @@ export class OcrProcessor {
     }
   }
 
-  private async executeJob(job: OcrJob): Promise<ProcessResult> {
+  /**
+   * Core job execution — caller MUST have acquired the lock via acquireLock()
+   * before calling this method. Does NOT modify the run's status to 'processing'
+   * (the lock acquisition handles that).
+   */
+  private async executeJobCore(job: OcrJob): Promise<ProcessResult> {
     const { ocrRunId, tenantId, mimeType, autoCreatePurchase } = job
 
-    // 1. Mark processing
-    await this.prisma.ocrRun.update({
-      where: { id: ocrRunId },
-      data:  { status: 'processing', processingStartedAt: new Date(), errorMessage: null },
-    })
-
-    // 2. Determine Gemini model by plan
+    // 1. Determine Gemini model by plan
     const sub = await this.prisma.subscription.findUnique({
       where:  { tenantId },
       select: { planType: true },
@@ -137,8 +198,7 @@ export class OcrProcessor {
         ? 'gemini-2.5-pro'
         : 'gemini-2.5-flash'
 
-    // 3. Resolve file buffer — for async jobs the buffer is not held in the OcrJob
-    //    to avoid keeping large allocations alive across retry delays. Re-fetch from storage.
+    // 2. Resolve file buffer — for async jobs re-fetch from storage (P0-3: avoid RAM retention)
     let fileBuffer: Buffer
     if (job.fileBuffer) {
       fileBuffer = job.fileBuffer
@@ -149,15 +209,15 @@ export class OcrProcessor {
       throw new Error('OcrJob must provide either fileBuffer or fileUrl')
     }
 
-    // Convert buffer to base64 data URI for Gemini Vision, then release the reference
-    // so the buffer is eligible for GC once base64 encoding is complete.
+    // Convert buffer to base64 data URI for Gemini Vision, then null the reference
+    // so the buffer is eligible for GC once encoding is complete.
     const base64  = fileBuffer.toString('base64')
     const dataUri = `data:${mimeType};base64,${base64}`
-    fileBuffer    = null as unknown as Buffer  // explicit null to hint GC
+    fileBuffer    = null as unknown as Buffer  // hint GC
 
-    // 4. Call Gemini with explicit timeout — prevents infinite hang on API unresponsiveness.
-    // clearTimeout in finally ensures the pending timer is cancelled whether Gemini wins
-    // or times out first, preventing unhandled rejection from the losing Promise.
+    // 3. Call Gemini with explicit timeout (P0-4: prevents infinite hang)
+    // clearTimeout in finally cancels the timer whether Gemini wins or times out,
+    // preventing unhandled rejection from the losing side of Promise.race.
     let geminiTimeoutId: ReturnType<typeof setTimeout> | undefined
     const geminiTimeout = new Promise<never>((_, reject) => {
       geminiTimeoutId = setTimeout(
@@ -184,7 +244,7 @@ export class OcrProcessor {
 
     const rawLlmPreview = rawLlmText.slice(0, MAX_RAW_LOG_CHARS)
 
-    // 5. Parse & validate
+    // 4. Parse & validate LLM output
     const rawJson = extractJsonFromLlmText(rawLlmText)
     if (rawJson === null) {
       throw new Error('No se pudo extraer JSON de la respuesta del modelo de IA')
@@ -196,40 +256,49 @@ export class OcrProcessor {
     }
 
     if (parsed.warnings.length > 0) {
-      this.logger.warn(
-        `OcrRun ${ocrRunId} warnings: ${parsed.warnings.join(' | ')}`,
-      )
+      this.logger.warn(`OcrRun ${ocrRunId} warnings: ${parsed.warnings.join(' | ')}`)
     }
 
-    const { data: fields, warnings } = parsed as { data: OcrExtractedFields & { confidence: number }; warnings: string[] }
+    const { data: fields, warnings } = parsed as {
+      data: OcrExtractedFields & { confidence: number }
+      warnings: string[]
+    }
 
-    // 6. Optional: create Purchase draft
+    // 5. Optional: create Purchase draft
     let purchaseId: string | undefined
     if (autoCreatePurchase && fields.total !== null && fields.total > 0) {
       purchaseId = await this.createPurchaseDraft(tenantId, ocrRunId, fields)
     }
 
-    // 7. Mark processed
+    // 6. Mark processed
     await this.prisma.ocrRun.update({
       where: { id: ocrRunId },
       data: {
-        status:               'processed',
-        fields:               fields as any,
-        confidence:           (fields as any).confidence ?? 0,
-        rawLlmResponse:       rawLlmPreview,
-        purchaseId:           purchaseId ?? null,
+        status:                'processed',
+        fields:                fields as any,
+        confidence:            (fields as any).confidence ?? 0,
+        rawLlmResponse:        rawLlmPreview,
+        purchaseId:            purchaseId ?? null,
         processingCompletedAt: new Date(),
-        errorMessage:         null,
+        errorMessage:          null,
       },
     })
 
-    // 8. Record usage (outside DB transaction — tolerant to failure)
+    // 7. Record usage (outside DB transaction — tolerant to failure)
     this.usageService.recordUsage(tenantId, 'ocr_run').catch((e: Error) => {
       this.logger.warn(`UsageRecord for ocr_run not persisted: ${e.message}`)
     })
 
-    return { fields, confidence: (fields as any).confidence ?? 0, purchaseId, rawLlmPreview, warnings }
+    return {
+      fields,
+      confidence:    (fields as any).confidence ?? 0,
+      purchaseId,
+      rawLlmPreview,
+      warnings,
+    }
   }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
 
   private async createPurchaseDraft(
     tenantId: string,
@@ -237,15 +306,16 @@ export class OcrProcessor {
     fields: OcrExtractedFields,
   ): Promise<string | undefined> {
     try {
-      // Look up provider by NIT (best-effort)
       let providerId: string | null = null
       if (fields.vendorNit) {
         const nitDigits = fields.vendorNit.replace(/[^0-9]/g, '')
-        const provider = await this.prisma.thirdParty.findFirst({
-          where: { tenantId, nit: { contains: nitDigits } },
-          select: { id: true },
-        })
-        providerId = provider?.id ?? null
+        if (nitDigits.length >= 9) {
+          const provider = await this.prisma.thirdParty.findFirst({
+            where: { tenantId, nit: { contains: nitDigits } },
+            select: { id: true },
+          })
+          providerId = provider?.id ?? null
+        }
       }
 
       const subtotal = fields.subtotal ?? 0
@@ -256,13 +326,13 @@ export class OcrProcessor {
         data: {
           tenantId,
           providerId,
-          number:         `OCR-${ocrRunId.slice(0, 8).toUpperCase()}`,
-          status:         'draft',
+          number:          `OCR-${ocrRunId.slice(0, 8).toUpperCase()}`,
+          status:          'draft',
           subtotal,
           taxTotal,
           total,
           paymentTermDays: 30,
-          notes:          `Borrador generado automáticamente por OCR. Factura: ${fields.invoiceNumber ?? 'N/A'} — ${fields.vendor ?? 'Proveedor desconocido'}`,
+          notes:           `Borrador generado automáticamente por OCR. Factura: ${fields.invoiceNumber ?? 'N/A'} — ${fields.vendor ?? 'Proveedor desconocido'}`,
           items: {
             create: fields.items.map((item, idx) => ({
               lineNumber:  idx + 1,
@@ -278,15 +348,10 @@ export class OcrProcessor {
         select: { id: true },
       })
 
-      this.logger.log(
-        `OcrRun ${ocrRunId}: Purchase draft ${purchase.id} created for tenant ${tenantId}`,
-      )
-
+      this.logger.log(`OcrRun ${ocrRunId}: Purchase draft ${purchase.id} created for tenant ${tenantId}`)
       return purchase.id
     } catch (e: any) {
-      this.logger.warn(
-        `OcrRun ${ocrRunId}: Could not create Purchase draft: ${e.message}`,
-      )
+      this.logger.warn(`OcrRun ${ocrRunId}: Could not create Purchase draft: ${e.message}`)
       return undefined
     }
   }
@@ -296,8 +361,8 @@ export class OcrProcessor {
       await this.prisma.ocrRun.update({
         where: { id: ocrRunId },
         data: {
-          status:               'failed',
-          errorMessage:         errorMessage.slice(0, 500),
+          status:                'failed',
+          errorMessage:          errorMessage.slice(0, 500),
           processingCompletedAt: new Date(),
         },
       })
@@ -307,8 +372,8 @@ export class OcrProcessor {
   }
 
   private async fetchFileFromStorage(url: string): Promise<Buffer> {
-    const MAX_BYTES = 10 * 1024 * 1024  // 10MB — same as upload limit
-    const response = await fetch(url, { signal: AbortSignal.timeout(30_000) })
+    const MAX_BYTES = 10 * 1024 * 1024
+    const response  = await fetch(url, { signal: AbortSignal.timeout(30_000) })
     if (!response.ok) {
       throw new Error(`Storage fetch failed (HTTP ${response.status}) for re-processing`)
     }

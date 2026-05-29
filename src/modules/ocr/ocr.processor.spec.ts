@@ -10,6 +10,7 @@ import { UsageService } from '../usage/usage.service'
 const mockPrisma = {
   ocrRun: {
     update:      vi.fn(),
+    updateMany:  vi.fn(),  // used by acquireLock() CAS
     findFirst:   vi.fn(),
   },
   subscription: {
@@ -80,6 +81,7 @@ describe('OcrProcessor', () => {
 
     mockPrisma.subscription.findUnique.mockResolvedValue({ planType: 'pyme' })
     mockPrisma.ocrRun.update.mockResolvedValue({})
+    mockPrisma.ocrRun.updateMany.mockResolvedValue({ count: 1 })  // lock acquired by default
     mockPrisma.auditEvent.create.mockResolvedValue({})
     mockUsage.recordUsage.mockResolvedValue({})
 
@@ -225,6 +227,111 @@ describe('OcrProcessor', () => {
       // through a successful call (which clears the timer in finally)
       const result = await processor.processSync(makeJob())
       expect(result).toBeDefined()  // confirms the non-timeout path works normally
+    })
+
+    // ── P1-1: CAS lock tests ─────────────────────────────────────────────────
+
+    it('[P1-1] acquireLock uses updateMany with pending|failed condition', async () => {
+      mockGemini.generateText.mockResolvedValue(VALID_LLM_RESPONSE)
+
+      await processor.processSync(makeJob())
+
+      // The CAS lock call must use updateMany with the correct WHERE condition
+      expect(mockPrisma.ocrRun.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            id:     'ocr-test-1',
+            status: { in: ['pending', 'failed'] },
+          }),
+          data: expect.objectContaining({ status: 'processing' }),
+        }),
+      )
+    })
+
+    it('[P1-1] processSync throws when lock cannot be acquired (run already processing)', async () => {
+      // Simulate another worker owning the lock: updateMany returns count=0
+      mockPrisma.ocrRun.updateMany.mockResolvedValue({ count: 0 })
+
+      await expect(processor.processSync(makeJob())).rejects.toThrow(
+        'already being processed or was completed',
+      )
+      // Gemini must NOT be called if we couldn't acquire the lock
+      expect(mockGemini.generateText).not.toHaveBeenCalled()
+    })
+
+    it('[P1-1] processSync calls markFailed when executeJobCore throws (leaves clean state)', async () => {
+      mockGemini.generateText.mockRejectedValue(new Error('Gemini API error'))
+
+      await expect(processor.processSync(makeJob())).rejects.toThrow('Gemini API error')
+
+      // markFailed must have been called — status transitions to 'failed', not stuck in 'processing'
+      const updateCalls = mockPrisma.ocrRun.update.mock.calls
+      const failedCall  = updateCalls.find(c => c[0]?.data?.status === 'failed')
+      expect(failedCall).toBeDefined()
+      expect(failedCall?.[0]?.data?.errorMessage).toContain('Gemini API error')
+    })
+
+    it('[P1-1] enqueue skips silently when lock is contested (idempotent, no error)', async () => {
+      // Another worker already owns the lock
+      mockPrisma.ocrRun.updateMany.mockResolvedValue({ count: 0 })
+
+      // enqueue() is fire-and-forget — it should NOT throw and should skip silently
+      expect(() => processor.enqueue(makeJob())).not.toThrow()
+
+      // Flush pending microtasks so the async chain resolves without advancing fake timers.
+      // acquireLock() → count=0 → return (no further async work) → chain settles in 3 ticks.
+      await Promise.resolve()
+      await Promise.resolve()
+      await Promise.resolve()
+
+      // Gemini must not be called — the lock was not acquired
+      expect(mockGemini.generateText).not.toHaveBeenCalled()
+    })
+
+    it('[P1-1] double processSync on same ocrRunId — second call loses the lock', async () => {
+      // First call: updateMany returns count=1 (lock acquired)
+      // Second call: updateMany returns count=0 (lock lost)
+      mockPrisma.ocrRun.updateMany
+        .mockResolvedValueOnce({ count: 1 })  // first call wins
+        .mockResolvedValueOnce({ count: 0 })  // second call loses
+      mockGemini.generateText.mockResolvedValue(VALID_LLM_RESPONSE)
+
+      const job = makeJob()
+
+      const [firstResult, secondResult] = await Promise.allSettled([
+        processor.processSync(job),
+        processor.processSync(job),
+      ])
+
+      // One succeeds, one rejects with lock-conflict message
+      const fulfilled = [firstResult, secondResult].find(r => r.status === 'fulfilled')
+      const rejected  = [firstResult, secondResult].find(r => r.status === 'rejected')
+
+      expect(fulfilled).toBeDefined()
+      expect(rejected?.status).toBe('rejected')
+      expect((rejected as PromiseRejectedResult).reason.message).toContain('already being processed')
+    })
+
+    it('[P1-1] internal retries (attempt>0) do NOT re-acquire the lock', async () => {
+      // First call (attempt 0): lock acquired
+      // Gemini fails twice then succeeds
+      mockGemini.generateText
+        .mockRejectedValueOnce(new Error('Gemini transient error'))
+        .mockRejectedValueOnce(new Error('Gemini transient error'))
+        .mockResolvedValueOnce(VALID_LLM_RESPONSE)
+
+      // Make delays instant for test speed
+      vi.useFakeTimers()
+      const processPromise = new Promise<void>((resolve, reject) => {
+        processor.enqueue(makeJob())
+        // Wait enough for all retries + delays to complete
+        setTimeout(() => resolve(), 30_000)
+      })
+      await vi.runAllTimersAsync()
+      vi.useRealTimers()
+
+      // Lock (updateMany) should have been called exactly ONCE (first attempt only)
+      expect(mockPrisma.ocrRun.updateMany).toHaveBeenCalledTimes(1)
     })
   })
 })

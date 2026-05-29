@@ -2,6 +2,7 @@ import {
   Injectable,
   Logger,
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
   Inject,
@@ -252,11 +253,18 @@ export class OcrService {
     ocrRunId: string,
     autoCreatePurchase = false,
   ): Promise<OcrInitiateResponse> {
+
+    // 1. Read with tenant isolation — determines run data and initial state
     const run = await this.prisma.ocrRun.findFirst({
-      where: { id: ocrRunId, tenantId },
+      where:  { id: ocrRunId, tenantId },
+      select: {
+        id: true, status: true, retryCount: true,
+        fileUrl: true, mimeType: true,
+      },
     })
     if (!run) throw new NotFoundException('Documento OCR no encontrado')
 
+    // 2. Business rule validation — user-friendly messages before the CAS
     if (run.status === 'processing') {
       throw new BadRequestException('El documento ya está siendo procesado.')
     }
@@ -272,8 +280,13 @@ export class OcrService {
         'Sube el archivo nuevamente o contacta soporte.',
       )
     }
+    if (!run.fileUrl) {
+      throw new BadRequestException(
+        'No se encontró la URL del archivo para reprocesar. Sube el documento nuevamente.',
+      )
+    }
 
-    // Quota gate — retry also counts
+    // 3. Quota gate
     const quota = await this.usageService.checkLimit(tenantId, 'ocr_run')
     if (!quota.allowed) {
       throw new ForbiddenException(
@@ -281,14 +294,28 @@ export class OcrService {
       )
     }
 
-    // Pass fileUrl to the processor — it will re-fetch from storage.
-    // Avoids loading the file into service memory just to pass it to the processor (P0-3).
-    if (!run.fileUrl) {
-      throw new BadRequestException(
-        'No se encontró la URL del archivo para reprocesar. Sube el documento nuevamente.',
+    // 4. Optimistic CAS lock — prevents double-retry race condition (P1-1).
+    //
+    //    The WHERE condition matches the EXACT state read in step 1.
+    //    If a concurrent request modified this run between steps 1 and 4,
+    //    the UPDATE affects 0 rows → ConflictException.
+    //
+    //    Scenario: two simultaneous POST /ocr/:id/retry requests both read
+    //    status='failed'. First request updates to status='pending' → count=1 ✅.
+    //    Second request tries same update but row now has status='pending' → count=0 → 409.
+    const locked = await this.prisma.ocrRun.updateMany({
+      where: { id: ocrRunId, tenantId, status: run.status },
+      data:  { status: 'pending' },
+    })
+
+    if (locked.count === 0) {
+      throw new ConflictException(
+        'El estado del documento cambió mientras procesabas la solicitud. ' +
+        'Recarga la página e inténtalo nuevamente.',
       )
     }
 
+    // 5. Enqueue — processor will CAS from 'pending' → 'processing' atomically
     this.processor.enqueue({
       ocrRunId:           run.id,
       tenantId,
@@ -297,7 +324,7 @@ export class OcrService {
       autoCreatePurchase,
     })
 
-    this.logger.log(`OcrRun ${run.id} queued for retry by user ${userId}`)
+    this.logger.log(`OcrRun ${run.id} queued for retry by user ${userId} (retryCount=${run.retryCount})`)
 
     return {
       ocrRunId: run.id,
