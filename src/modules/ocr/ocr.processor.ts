@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common'
+import type { Prisma } from '@prisma/client'
 import { PrismaService } from '../database/prisma.service'
 import { GeminiService } from '../ai/gemini.service'
 import { UsageService } from '../usage/usage.service'
@@ -264,27 +265,40 @@ export class OcrProcessor {
       warnings: string[]
     }
 
-    // 5. Optional: create Purchase draft
-    let purchaseId: string | undefined
-    if (autoCreatePurchase && fields.total !== null && fields.total > 0) {
-      purchaseId = await this.createPurchaseDraft(tenantId, ocrRunId, fields)
-    }
+    // 5 + 6. Atomic commit: purchase creation (if requested) + OcrRun final update (P1-4).
+    //
+    // These two writes MUST be in the same $transaction:
+    //   - If purchase.create succeeds but ocrRun.update fails → both roll back → no orphaned Purchase
+    //   - If the container dies mid-transaction → PostgreSQL rolls back → clean 'processing' state
+    //   - On retry: idempotency check in createPurchaseDraftInTx reuses the existing Purchase
+    //     instead of creating a duplicate
+    //
+    // createPurchaseDraftInTx does NOT swallow errors — failure propagates to roll back the TX,
+    // which causes executeJobCore to throw, and processWithRetry retries the entire job.
+    const purchaseId = await this.prisma.$transaction(async (tx) => {
+      let pId: string | undefined
 
-    // 6. Mark processed
-    await this.prisma.ocrRun.update({
-      where: { id: ocrRunId },
-      data: {
-        status:                'processed',
-        fields:                fields as any,
-        confidence:            (fields as any).confidence ?? 0,
-        rawLlmResponse:        rawLlmPreview,
-        purchaseId:            purchaseId ?? null,
-        processingCompletedAt: new Date(),
-        errorMessage:          null,
-      },
+      if (autoCreatePurchase && fields.total !== null && fields.total > 0) {
+        pId = await this.createPurchaseDraftInTx(tx, tenantId, ocrRunId, fields)
+      }
+
+      await tx.ocrRun.update({
+        where: { id: ocrRunId },
+        data: {
+          status:                'processed',
+          fields:                fields as any,
+          confidence:            (fields as any).confidence ?? 0,
+          rawLlmResponse:        rawLlmPreview,
+          purchaseId:            pId ?? null,
+          processingCompletedAt: new Date(),
+          errorMessage:          null,
+        },
+      })
+
+      return pId
     })
 
-    // 7. Record usage (outside DB transaction — tolerant to failure)
+    // 7. Record usage — after the transaction commits, tolerant to failure
     this.usageService.recordUsage(tenantId, 'ocr_run').catch((e: Error) => {
       this.logger.warn(`UsageRecord for ocr_run not persisted: ${e.message}`)
     })
@@ -300,60 +314,97 @@ export class OcrProcessor {
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  private async createPurchaseDraft(
+  /**
+   * Creates a Purchase draft inside an existing Prisma $transaction.
+   *
+   * Idempotency (P1-4 guarantee):
+   *   The purchase number `OCR-{ocrRunId[0..7]}` is deterministic.
+   *   If a previous attempt already created a Purchase with this number
+   *   (crash between purchase.create and ocrRun.update), we reuse it
+   *   instead of creating a duplicate.
+   *
+   * Error handling:
+   *   - Provider NIT lookup failure is non-fatal → providerId = null (best-effort)
+   *   - purchase.create failure IS fatal → propagates to roll back the $transaction
+   *     so no orphaned Purchase is created and the OcrRun stays in 'processing'
+   *     (eligible for retry via processWithRetry)
+   *
+   * Returns the purchase id (always a string on success — never undefined).
+   */
+  private async createPurchaseDraftInTx(
+    tx: Prisma.TransactionClient,
     tenantId: string,
     ocrRunId: string,
     fields: OcrExtractedFields,
-  ): Promise<string | undefined> {
-    try {
-      let providerId: string | null = null
-      if (fields.vendorNit) {
-        const nitDigits = fields.vendorNit.replace(/[^0-9]/g, '')
-        if (nitDigits.length >= 9) {
-          const provider = await this.prisma.thirdParty.findFirst({
-            where: { tenantId, nit: { contains: nitDigits } },
+  ): Promise<string> {
+    const purchaseNumber = `OCR-${ocrRunId.slice(0, 8).toUpperCase()}`
+
+    // Idempotency check: if a previous partial attempt already created this Purchase
+    // (purchase.create succeeded but ocrRun.update failed or the container crashed),
+    // reuse it instead of creating a duplicate.
+    const existing = await tx.purchase.findFirst({
+      where:  { tenantId, number: purchaseNumber },
+      select: { id: true },
+    })
+    if (existing) {
+      this.logger.log(
+        `OcrRun ${ocrRunId}: reusing Purchase ${existing.id} from previous attempt (idempotent retry)`,
+      )
+      return existing.id
+    }
+
+    // Provider NIT lookup — best-effort, failure returns null (does not abort the TX)
+    let providerId: string | null = null
+    if (fields.vendorNit) {
+      const nitDigits = fields.vendorNit.replace(/[^0-9]/g, '')
+      if (nitDigits.length >= 9) {
+        try {
+          const provider = await tx.thirdParty.findFirst({
+            where:  { tenantId, nit: { contains: nitDigits } },
             select: { id: true },
           })
           providerId = provider?.id ?? null
+        } catch {
+          // NIT lookup failure is non-fatal — purchase still created without provider
         }
       }
-
-      const subtotal = fields.subtotal ?? 0
-      const taxTotal = fields.taxTotal ?? 0
-      const total    = fields.total    ?? subtotal + taxTotal
-
-      const purchase = await this.prisma.purchase.create({
-        data: {
-          tenantId,
-          providerId,
-          number:          `OCR-${ocrRunId.slice(0, 8).toUpperCase()}`,
-          status:          'draft',
-          subtotal,
-          taxTotal,
-          total,
-          paymentTermDays: 30,
-          notes:           `Borrador generado automáticamente por OCR. Factura: ${fields.invoiceNumber ?? 'N/A'} — ${fields.vendor ?? 'Proveedor desconocido'}`,
-          items: {
-            create: fields.items.map((item, idx) => ({
-              lineNumber:  idx + 1,
-              productName: item.description,
-              quantity:    item.quantity,
-              unitPrice:   item.unitPrice,
-              taxRate:     item.taxRate,
-              subtotal:    item.subtotal,
-              taxAmount:   item.taxAmount,
-            })),
-          },
-        },
-        select: { id: true },
-      })
-
-      this.logger.log(`OcrRun ${ocrRunId}: Purchase draft ${purchase.id} created for tenant ${tenantId}`)
-      return purchase.id
-    } catch (e: any) {
-      this.logger.warn(`OcrRun ${ocrRunId}: Could not create Purchase draft: ${e.message}`)
-      return undefined
     }
+
+    const subtotal = fields.subtotal ?? 0
+    const taxTotal = fields.taxTotal ?? 0
+    const total    = fields.total    ?? subtotal + taxTotal
+
+    // purchase.create failure propagates up → rolls back the entire $transaction
+    const purchase = await tx.purchase.create({
+      data: {
+        tenantId,
+        providerId,
+        number:          purchaseNumber,
+        status:          'draft',
+        subtotal,
+        taxTotal,
+        total,
+        paymentTermDays: 30,
+        notes:           `Borrador generado automáticamente por OCR. Factura: ${fields.invoiceNumber ?? 'N/A'} — ${fields.vendor ?? 'Proveedor desconocido'}`,
+        items: {
+          create: fields.items.map((item, idx) => ({
+            lineNumber:  idx + 1,
+            productName: item.description,
+            quantity:    item.quantity,
+            unitPrice:   item.unitPrice,
+            taxRate:     item.taxRate,
+            subtotal:    item.subtotal,
+            taxAmount:   item.taxAmount,
+          })),
+        },
+      },
+      select: { id: true },
+    })
+
+    this.logger.log(
+      `OcrRun ${ocrRunId}: Purchase draft ${purchase.id} created for tenant ${tenantId}`,
+    )
+    return purchase.id
   }
 
   private async markFailed(ocrRunId: string, errorMessage: string): Promise<void> {

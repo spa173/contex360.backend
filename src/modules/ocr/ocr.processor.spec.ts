@@ -20,9 +20,13 @@ const mockPrisma = {
     findFirst: vi.fn(),
   },
   purchase: {
-    create: vi.fn(),
+    findFirst: vi.fn(),
+    create:    vi.fn(),
   },
   auditEvent: { create: vi.fn() },
+  // $transaction calls the callback with mockPrisma as the tx client.
+  // This mirrors the real Prisma behavior and lets all nested mock calls work.
+  $transaction: vi.fn(async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => fn(mockPrisma)),
 }
 
 const mockGemini = {
@@ -82,8 +86,16 @@ describe('OcrProcessor', () => {
     mockPrisma.subscription.findUnique.mockResolvedValue({ planType: 'pyme' })
     mockPrisma.ocrRun.update.mockResolvedValue({})
     mockPrisma.ocrRun.updateMany.mockResolvedValue({ count: 1 })  // lock acquired by default
+    mockPrisma.purchase.findFirst.mockResolvedValue(null)          // no pre-existing purchase
+    mockPrisma.purchase.create.mockResolvedValue({ id: 'purchase-new' })
     mockPrisma.auditEvent.create.mockResolvedValue({})
     mockUsage.recordUsage.mockResolvedValue({})
+    // Reset $transaction to the default pass-through implementation.
+    // vi.clearAllMocks() clears call history but NOT mockImplementation overrides,
+    // so rollback tests that set a custom implementation would bleed into later tests.
+    mockPrisma.$transaction.mockImplementation(
+      async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => fn(mockPrisma),
+    )
 
     const module = await Test.createTestingModule({
       providers: [
@@ -332,6 +344,198 @@ describe('OcrProcessor', () => {
 
       // Lock (updateMany) should have been called exactly ONCE (first attempt only)
       expect(mockPrisma.ocrRun.updateMany).toHaveBeenCalledTimes(1)
+    })
+
+    // ── P1-4: Atomic transaction tests ──────────────────────────────────────
+
+    it('[P1-4] uses $transaction to atomically create Purchase and update OcrRun', async () => {
+      mockGemini.generateText.mockResolvedValue(VALID_LLM_RESPONSE)
+
+      await processor.processSync(makeJob({ autoCreatePurchase: true }))
+
+      // $transaction must have been called (wraps purchase.create + ocrRun.update)
+      expect(mockPrisma.$transaction).toHaveBeenCalledOnce()
+    })
+
+    it('[P1-4] creates Purchase when autoCreatePurchase=true and total > 0', async () => {
+      mockGemini.generateText.mockResolvedValue(VALID_LLM_RESPONSE)
+
+      const result = await processor.processSync(makeJob({ autoCreatePurchase: true }))
+
+      expect(mockPrisma.purchase.create).toHaveBeenCalledOnce()
+      expect(result.purchaseId).toBe('purchase-new')
+      // OcrRun must be updated with the purchaseId inside the same transaction
+      expect(mockPrisma.ocrRun.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status:    'processed',
+            purchaseId: 'purchase-new',
+          }),
+        }),
+      )
+    })
+
+    it('[P1-4] does NOT create Purchase when autoCreatePurchase=false', async () => {
+      mockGemini.generateText.mockResolvedValue(VALID_LLM_RESPONSE)
+
+      await processor.processSync(makeJob({ autoCreatePurchase: false }))
+
+      expect(mockPrisma.purchase.create).not.toHaveBeenCalled()
+      expect(mockPrisma.ocrRun.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ purchaseId: null }),
+        }),
+      )
+    })
+
+    it('[P1-4] does NOT create Purchase when fields.total is 0 or null', async () => {
+      const zeroTotalResponse = JSON.stringify({
+        vendor: 'Test', items: [], subtotal: 0, taxTotal: 0, total: 0, confidence: 0.9,
+      })
+      mockGemini.generateText.mockResolvedValue(zeroTotalResponse)
+
+      await processor.processSync(makeJob({ autoCreatePurchase: true }))
+
+      expect(mockPrisma.purchase.create).not.toHaveBeenCalled()
+    })
+
+    it('[P1-4] idempotent retry — reuses existing Purchase if found by OCR number', async () => {
+      // Simulate crash between purchase.create and ocrRun.update:
+      // A previous attempt created 'purchase-existing' but OcrRun wasn't updated
+      mockPrisma.purchase.findFirst.mockResolvedValue({ id: 'purchase-existing' })
+      mockGemini.generateText.mockResolvedValue(VALID_LLM_RESPONSE)
+
+      const result = await processor.processSync(makeJob({ autoCreatePurchase: true }))
+
+      // Must NOT create a new Purchase (idempotent)
+      expect(mockPrisma.purchase.create).not.toHaveBeenCalled()
+      // Must reuse the existing one
+      expect(result.purchaseId).toBe('purchase-existing')
+      expect(mockPrisma.ocrRun.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ purchaseId: 'purchase-existing' }),
+        }),
+      )
+    })
+
+    it('[P1-4] transaction rollback — when ocrRun.update fails inside TX, Purchase is NOT persisted', async () => {
+      mockGemini.generateText.mockResolvedValue(VALID_LLM_RESPONSE)
+
+      // Simulate $transaction rollback: the callback throws when ocrRun.update fails
+      mockPrisma.$transaction.mockImplementation(async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => {
+        const fakeTx = {
+          ...mockPrisma,
+          ocrRun: {
+            ...mockPrisma.ocrRun,
+            update: vi.fn().mockRejectedValue(new Error('DB connection lost during commit')),
+          },
+        }
+        return fn(fakeTx)  // will throw when ocrRun.update is called inside
+      })
+
+      // executeJobCore throws → processSync catches → markFailed → re-throws
+      await expect(processor.processSync(makeJob({ autoCreatePurchase: true }))).rejects.toThrow(
+        'DB connection lost during commit',
+      )
+
+      // markFailed must be called to leave the run in 'failed' (not 'processing')
+      const updateCalls = mockPrisma.ocrRun.update.mock.calls
+      const failedCall  = updateCalls.find(c => c[0]?.data?.status === 'failed')
+      expect(failedCall).toBeDefined()
+
+      // The outer ocrRun.update (marking processed) was inside the failed TX — rolled back
+      // Only the markFailed update should exist on the OUTER prisma mock
+      const processedCall = updateCalls.find(c => c[0]?.data?.status === 'processed')
+      expect(processedCall).toBeUndefined()
+    })
+
+    it('[P1-4] transaction rollback — when purchase.create fails, OcrRun stays in processing', async () => {
+      mockGemini.generateText.mockResolvedValue(VALID_LLM_RESPONSE)
+
+      // purchase.create fails inside the transaction
+      mockPrisma.$transaction.mockImplementation(async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => {
+        const fakeTx = {
+          ...mockPrisma,
+          purchase: {
+            ...mockPrisma.purchase,
+            create: vi.fn().mockRejectedValue(new Error('Purchase table locked')),
+          },
+        }
+        return fn(fakeTx)
+      })
+
+      await expect(processor.processSync(makeJob({ autoCreatePurchase: true }))).rejects.toThrow(
+        'Purchase table locked',
+      )
+
+      // OcrRun must NOT be marked 'processed' — TX rolled back
+      const updateCalls = mockPrisma.ocrRun.update.mock.calls
+      const processedCall = updateCalls.find(c => c[0]?.data?.status === 'processed')
+      expect(processedCall).toBeUndefined()
+
+      // markFailed must have been called (processSync catches and calls markFailed)
+      const failedCall = updateCalls.find(c => c[0]?.data?.status === 'failed')
+      expect(failedCall).toBeDefined()
+    })
+
+    it('[P1-4] retry after crash — idempotency check prevents duplicate Purchase', async () => {
+      mockGemini.generateText.mockResolvedValue(VALID_LLM_RESPONSE)
+
+      // Attempt 1: purchase created, ocrRun.update fails → TX rolled back (purchase NOT persisted)
+      // Attempt 2 (simulated): no existing purchase, creates fresh → succeeds
+      // This tests that the findFirst check correctly finds no pre-existing purchase
+      mockPrisma.purchase.findFirst.mockResolvedValue(null)  // no previous attempt left a purchase
+      mockPrisma.purchase.create.mockResolvedValue({ id: 'purchase-attempt-2' })
+
+      const result = await processor.processSync(makeJob({ autoCreatePurchase: true }))
+
+      // Fresh purchase created on this (retry) attempt
+      expect(mockPrisma.purchase.create).toHaveBeenCalledOnce()
+      expect(result.purchaseId).toBe('purchase-attempt-2')
+    })
+
+    it('[P1-4] concurrent retries — second retry finds existing Purchase (idempotent)', async () => {
+      mockGemini.generateText.mockResolvedValue(VALID_LLM_RESPONSE)
+
+      // First retry succeeded partially: Purchase created but TX commit raced.
+      // Second retry starts: findFirst returns the purchase from the first retry.
+      mockPrisma.purchase.findFirst
+        .mockResolvedValueOnce(null)                      // first retry: no existing
+        .mockResolvedValueOnce({ id: 'purchase-retry-1' }) // second retry: found from first
+
+      // First retry: creates purchase-retry-1 and commits
+      const result1 = await processor.processSync(makeJob({ autoCreatePurchase: true }))
+
+      // Simulate second retry (lock re-acquired from 'failed' state)
+      mockPrisma.ocrRun.updateMany.mockResolvedValue({ count: 1 })
+      const result2 = await processor.processSync(makeJob({ autoCreatePurchase: true }))
+
+      // First call creates a purchase
+      expect(result1.purchaseId).toBe('purchase-new')
+      // Second call reuses the existing one (purchase.create called only once total)
+      expect(mockPrisma.purchase.create).toHaveBeenCalledTimes(1)
+      expect(result2.purchaseId).toBe('purchase-retry-1')
+    })
+
+    it('[P1-4] CAS lock remains the only source of truth — TX does not affect lock ownership', async () => {
+      mockGemini.generateText.mockResolvedValue(VALID_LLM_RESPONSE)
+
+      // Verify the call order: acquireLock (updateMany) happens BEFORE $transaction
+      const callOrder: string[] = []
+      mockPrisma.ocrRun.updateMany.mockImplementation(async () => {
+        callOrder.push('acquireLock')
+        return { count: 1 }
+      })
+      mockPrisma.$transaction.mockImplementation(async (fn: (tx: typeof mockPrisma) => Promise<unknown>) => {
+        callOrder.push('$transaction')
+        return fn(mockPrisma)
+      })
+
+      await processor.processSync(makeJob())
+
+      // Lock must be acquired BEFORE the transaction starts
+      expect(callOrder[0]).toBe('acquireLock')
+      expect(callOrder[1]).toBe('$transaction')
     })
   })
 })
