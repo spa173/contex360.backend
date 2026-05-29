@@ -56,7 +56,7 @@ export class WompiService {
         },
         {
           headers: {
-            Authorization: `Bearer ${this.publicKey}`,
+            Authorization: `Bearer ${this.privateKey}`,
             'Content-Type': 'application/json'
           }
         }
