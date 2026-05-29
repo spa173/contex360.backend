@@ -161,20 +161,100 @@ export function parseOcrLlmResponse(raw: unknown): SafeParseResult<OcrLlmRespons
 }
 
 /**
- * Extract JSON from LLM text that may include markdown fences or prose.
+ * Extract the first valid JSON object from LLM text that may contain markdown
+ * fences, prose before/after the JSON, multiple JSON blocks, or curly braces
+ * inside string values.
+ *
+ * Strategy:
+ *   1. Markdown fence (`\`\`\`json … \`\`\``) — fast path for well-formatted output
+ *   2. Brace-balancing parser — scans for the first complete, parseable JSON object
+ *      using a 3-state automaton (NORMAL / IN_STRING / ESCAPE) so that `{` and `}`
+ *      inside string values are correctly ignored.
+ *
+ * The old firstIndexOf/lastIndexOf approach failed when any text after the JSON
+ * contained a `}` character — it would slice up to the wrong `}` and produce
+ * unparseable input. The brace-balancing approach is deterministic and handles
+ * all real Gemini response formats observed in production.
  */
 export function extractJsonFromLlmText(text: string): unknown {
-  // Try markdown JSON fence first
+  if (!text) return null
+
+  // 1. Markdown fence — highest priority (Gemini 2.5 reliably uses this)
   const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/)
   if (fenceMatch) {
-    try { return JSON.parse(fenceMatch[1].trim()) } catch { /* fall through */ }
+    try { return JSON.parse(fenceMatch[1].trim()) } catch { /* fall through to brace parser */ }
   }
 
-  // Try to find first { ... } block
-  const firstBrace = text.indexOf('{')
-  const lastBrace  = text.lastIndexOf('}')
-  if (firstBrace !== -1 && lastBrace > firstBrace) {
-    try { return JSON.parse(text.slice(firstBrace, lastBrace + 1)) } catch { /* fall through */ }
+  // 2. Brace-balancing parser (P1-5: replaces firstIndexOf/lastIndexOf)
+  return balancedJsonExtract(text)
+}
+
+/**
+ * Scans `text` left-to-right for the first complete JSON object `{…}` using a
+ * brace-depth counter that correctly ignores `{` and `}` inside string literals.
+ *
+ * When a balanced `{…}` candidate is found, it is passed to JSON.parse:
+ *   - Parses ok  → return the value immediately
+ *   - SyntaxError → skip past the candidate and continue scanning (handles
+ *     cases like `{unquoted: keys}` appearing before the real JSON object)
+ *
+ * Returns null if no complete, parseable JSON object is found.
+ *
+ * Exported for unit-testing the parser in isolation.
+ */
+export function balancedJsonExtract(text: string): unknown {
+  const len = text.length
+  let scanFrom = 0
+
+  while (scanFrom < len) {
+    // Find the next opening brace at depth 0
+    const start = text.indexOf('{', scanFrom)
+    if (start === -1) return null   // no more candidates
+
+    let depth    = 0
+    let inString = false
+    let escape   = false
+
+    for (let j = start; j < len; j++) {
+      const ch = text[j]
+
+      // ── Escape state: consume one character, return to IN_STRING ──────────
+      if (escape) {
+        escape = false
+        continue
+      }
+
+      // ── IN_STRING: only look for \ and closing " ──────────────────────────
+      if (inString) {
+        if (ch === '\\') { escape = true;  continue }
+        if (ch === '"')  { inString = false; continue }
+        continue   // { and } inside strings are literals — ignore
+      }
+
+      // ── NORMAL state ───────────────────────────────────────────────────────
+      if      (ch === '"') { inString = true; continue }
+      else if (ch === '{') { depth++ }
+      else if (ch === '}') {
+        depth--
+        if (depth === 0) {
+          // Balanced candidate found — try to parse it
+          const candidate = text.slice(start, j + 1)
+          try {
+            return JSON.parse(candidate)
+          } catch {
+            // Invalid JSON (e.g. unquoted keys, trailing commas) — skip past
+            // this candidate and look for the next `{` in the remaining text
+            scanFrom = j + 1
+            break  // restart outer while
+          }
+        }
+      }
+    }
+
+    // Inner loop ended without finding a balanced close:
+    // depth > 0 means the JSON was truncated — no more candidates possible
+    if (depth !== 0) return null
+    // depth === 0 means we broke out after a failed parse (scanFrom updated)
   }
 
   return null

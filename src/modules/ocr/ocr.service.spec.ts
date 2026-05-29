@@ -514,7 +514,7 @@ describe('parseOcrLlmResponse', () => {
   })
 })
 
-describe('extractJsonFromLlmText', () => {
+describe('extractJsonFromLlmText — markdown fence path (existing)', () => {
   it('extracts JSON from markdown fence', async () => {
     const { extractJsonFromLlmText } = await import('./ocr.schemas')
     const text = 'Aquí está el resultado:\n```json\n{"vendor":"ACME","total":119000}\n```'
@@ -532,5 +532,195 @@ describe('extractJsonFromLlmText', () => {
   it('returns null when no JSON found', async () => {
     const { extractJsonFromLlmText } = await import('./ocr.schemas')
     expect(extractJsonFromLlmText('No hay JSON aquí')).toBeNull()
+  })
+})
+
+// ── P1-5: balancedJsonExtract — comprehensive parser tests ───────────────────
+
+describe('balancedJsonExtract (P1-5 — brace-balancing parser)', () => {
+  // Import both functions once for the describe block
+  let extract: typeof import('./ocr.schemas').balancedJsonExtract
+  let extractFull: typeof import('./ocr.schemas').extractJsonFromLlmText
+
+  beforeEach(async () => {
+    const mod = await import('./ocr.schemas')
+    extract = mod.balancedJsonExtract
+    extractFull = mod.extractJsonFromLlmText
+  })
+
+  // ── Core correctness ───────────────────────────────────────────────────────
+
+  it('extracts JSON from clean text with no surrounding content', () => {
+    expect(extract('{"vendor":"ACME","total":119000}')).toMatchObject({
+      vendor: 'ACME', total: 119000,
+    })
+  })
+
+  it('[bug-fix] text + JSON + text (the lastIndexOf bug case)', () => {
+    // This is the PRIMARY bug: lastIndexOf('}') would grab the } from "adjunto."
+    // causing JSON.parse to fail on the concatenated string
+    const text =
+      'El documento fue procesado correctamente.\n' +
+      '{"vendor":"Proveedor SAS","total":119000}\n' +
+      'Nota: Los valores pueden estar en miles. Ver {formulario} adjunto.'
+    const result = extract(text)
+    expect(result).toMatchObject({ vendor: 'Proveedor SAS', total: 119000 })
+  })
+
+  it('[bug-fix] two consecutive JSON objects — returns the FIRST one', () => {
+    // lastIndexOf would merge both objects into one unparseable string
+    const text = '{"vendor":"ACME","total":100000} {"currency":"COP","note":"ver anexo"}'
+    const result = extract(text)
+    // Must return the FIRST complete JSON, not a merged/broken one
+    expect(result).toMatchObject({ vendor: 'ACME' })
+    expect((result as any).currency).toBeUndefined()
+  })
+
+  // ── Nested objects ─────────────────────────────────────────────────────────
+
+  it('handles deeply nested JSON without corruption', () => {
+    const text = '{"vendor":"ACME","address":{"city":"Bogotá","zip":"110111"},"total":50000}'
+    const result = extract(text)
+    expect(result).toMatchObject({ vendor: 'ACME', address: { city: 'Bogotá' } })
+  })
+
+  it('nested JSON preceded by prose', () => {
+    const text =
+      'Aquí están los datos extraídos: ' +
+      '{"vendor":"Test S.A.","items":[{"desc":"Producto","qty":2}],"total":80000}'
+    const result = extract(text)
+    expect(result).toMatchObject({ vendor: 'Test S.A.', total: 80000 })
+  })
+
+  // ── Curly braces inside strings ───────────────────────────────────────────
+
+  it('ignores { and } that appear inside string values', () => {
+    const text = '{"notes":"ver {formulario} adjunto","total":1000}'
+    const result = extract(text)
+    expect(result).toMatchObject({ notes: 'ver {formulario} adjunto', total: 1000 })
+  })
+
+  it('multiple braces in string values followed by prose brace', () => {
+    const text =
+      '{"notes":"formato {A} y {B}","total":5000} ' +
+      'El {estado} del documento es correcto.'
+    const result = extract(text)
+    expect(result).toMatchObject({ notes: 'formato {A} y {B}', total: 5000 })
+  })
+
+  it('handles escaped quotes inside strings without breaking string state', () => {
+    const text = '{"vendor":"Empresa \\"Quoted\\" S.A.","total":200000}'
+    const result = extract(text)
+    expect(result).toMatchObject({ vendor: 'Empresa "Quoted" S.A.', total: 200000 })
+  })
+
+  it('handles double-backslash (\\\\) in string values', () => {
+    // JSON string: {"path": "C:\\Users"} — raw chars include \\
+    const text = '{"path":"C:\\\\Users","total":1000}'
+    const result = extract(text)
+    expect(result).toMatchObject({ path: 'C:\\Users', total: 1000 })
+  })
+
+  // ── Incomplete / malformed JSON ────────────────────────────────────────────
+
+  it('returns null for incomplete JSON (no closing brace)', () => {
+    expect(extract('{"vendor":"ACME","total":119000')).toBeNull()
+  })
+
+  it('returns null for empty string', () => {
+    expect(extract('')).toBeNull()
+  })
+
+  it('returns null for whitespace-only string', () => {
+    expect(extract('   \n\t  ')).toBeNull()
+  })
+
+  it('returns null for text with no JSON at all', () => {
+    expect(extract('No hay JSON en este texto. Solo palabras.')).toBeNull()
+  })
+
+  it('skips invalid JSON (unquoted keys) and finds valid JSON that follows', () => {
+    // LLM sometimes outputs non-standard JSON first, then corrects itself
+    const text = '{tipo: "incorrecto", valor: 100} {"vendor":"ACME","total":50000}'
+    const result = extract(text)
+    // Should skip the invalid first block and return the valid second block
+    expect(result).toMatchObject({ vendor: 'ACME', total: 50000 })
+  })
+
+  it('returns null when only invalid JSON exists (unquoted keys, no valid fallback)', () => {
+    expect(extract('{tipo: "x", valor: 100}')).toBeNull()
+  })
+
+  // ── Real Gemini response patterns ─────────────────────────────────────────
+
+  it('real pattern: JSON + multi-line disclaimer after', () => {
+    // Gemini sometimes adds explanatory text after the JSON
+    const text =
+      '{"vendor":"Distribuidora ABC S.A.","vendorNit":"900123456-7",' +
+      '"invoiceNumber":"FV-2026-001","total":238000,"confidence":0.92}\n\n' +
+      'Nota: Los valores de IVA fueron calculados al 19%. ' +
+      'El campo "confidence" refleja la calidad de la imagen. ' +
+      'Si algún campo aparece como null, el texto no era legible.'
+    const result = extract(text)
+    expect(result).toMatchObject({
+      vendor: 'Distribuidora ABC S.A.',
+      vendorNit: '900123456-7',
+      total: 238000,
+      confidence: 0.92,
+    })
+  })
+
+  it('real pattern: JSON preceded by explanation paragraph', () => {
+    const text =
+      'He analizado el documento y extraído los siguientes datos contables:\n\n' +
+      '{"vendor":"Papelería Nacional","total":45000,"currency":"COP","items":[' +
+      '{"description":"Resma papel A4","quantity":2,"unitPrice":22500}]}\n\n' +
+      'El documento parece ser una factura de compra estándar.'
+    const result = extract(text)
+    expect(result).toMatchObject({ vendor: 'Papelería Nacional', total: 45000 })
+  })
+
+  it('real pattern: markdown fence with multi-line JSON', () => {
+    const text =
+      'Aquí está la extracción:\n' +
+      '```json\n' +
+      '{\n' +
+      '  "vendor": "Empresa Test",\n' +
+      '  "total": 119000,\n' +
+      '  "confidence": 0.88\n' +
+      '}\n' +
+      '```'
+    const result = extractFull(text)  // uses fence path
+    expect(result).toMatchObject({ vendor: 'Empresa Test', total: 119000 })
+  })
+
+  it('real pattern: fence with invalid JSON falls through to brace parser', () => {
+    // If the fence content is invalid, fall through to balancedJsonExtract
+    const text =
+      '```json\n{invalid content here}\n```\n' +
+      'Sin embargo, los datos reales son: {"vendor":"ACME","total":50000}'
+    const result = extractFull(text)
+    // Fence parse fails → falls through → brace parser finds the second JSON
+    expect(result).toMatchObject({ vendor: 'ACME', total: 50000 })
+  })
+
+  // ── Determinism guarantee ─────────────────────────────────────────────────
+
+  it('is deterministic — same input always produces same output', () => {
+    const text = 'Texto {"vendor":"Test","total":100} más texto {"vendor":"Other","total":200}'
+    const r1 = extract(text)
+    const r2 = extract(text)
+    const r3 = extract(text)
+    expect(r1).toEqual(r2)
+    expect(r2).toEqual(r3)
+    expect((r1 as any).vendor).toBe('Test')  // always the FIRST complete JSON
+  })
+
+  it('two identical JSON objects — always returns first one', () => {
+    const json = '{"vendor":"X","total":100}'
+    const text = `${json} some prose ${json}`
+    const result = extract(text)
+    expect(result).toMatchObject({ vendor: 'X', total: 100 })
+    // Both are valid; deterministically returns first
   })
 })
