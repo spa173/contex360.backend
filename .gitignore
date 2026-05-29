@@ -1,33 +1,35 @@
-node_modules
-dist
-coverage
-.pgdata
+# =========================================================================
+# Contex360 - Backend Git Ignore Configuration
+# =========================================================================
+
+# --- 1. SECRETS & TOKENS ---
+# Evitar subir claves de API, contraseñas, certificados y configuraciones con credenciales
 .env
 .env.local
 .env.*
-*.log
-*.bat
-*.bak
+**/*.pem
+**/*.key
+*.pub
+*.cert
+*.crt
+*.pfx
+*.p12
+.npmrc
+.yarnrc
+auth.json
+.git-credentials
 
-# Pruebas locales privadas
-tests-local/
-
-# Scripts archivados
-_archive_scripts/
-
-# Colecciones de pruebas de API
-api-tests/
-
-# Windsurf & AI Agents skills (privadas, no subir a GitHub)
-skills/
-skills-lock.json
+# --- 2. AI AGENTS & TOOLS (Archivos de IA) ---
+# Evitar subir configuraciones locales, permisos o historial de agentes de IA
+.claude/
+.claudeignore
+.gemini/
 .agents/
 .adal/
 .aider-desk/
+.aider*
 .augment/
 .bob/
-.claude/
-.claudeignore
 .codeartsdoer/
 .codebuddy/
 .codemaker/
@@ -39,7 +41,6 @@ skills-lock.json
 .devin/
 .factory/
 .forge/
-.gemini/
 .goose/
 .graphify/
 .hermes/
@@ -63,8 +64,58 @@ skills-lock.json
 .vibe/
 .windsurf/
 .zencoder/
-
-# Extra Security Rules
-**/*.pem
-**/*.key
 .windsurfrules
+skills/
+skills-lock.json
+
+# --- 3. LOCAL SETTINGS (Settings Locales) ---
+# Configuraciones del IDE y archivos del sistema local/operativo
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.history/
+.DS_Store
+Thumbs.db
+
+# --- 4. LOGS (Registros) ---
+# Logs de ejecución, depuración y del gestor de paquetes
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+pnpm-error.log*
+
+# --- 5. TEMPORARY FILES & BUILD OUTPUTS (Archivos Temporales) ---
+# Cachés, dependencias instaladas y compilaciones de producción
+node_modules/
+dist/
+coverage/
+.pgdata/
+.cache/
+.turbo/
+out/
+tmp/
+temp/
+*.tmp
+*.temp
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+*.bat
+*.bak
+
+# --- 6. PRIVATE CONTEXTS & LOCAL TESTING (Contextos Privados) ---
+# Archivos de pruebas locales y notas de desarrollo personales
+tests-local/
+scratch/
+_archive_scripts/
+api-tests/
+private-context/
+*.local

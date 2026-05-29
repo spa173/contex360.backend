@@ -64,8 +64,13 @@ export class WompiService {
 
       return response.data.data;
     } catch (error: any) {
+      console.error('Wompi API Error:', error.response?.data || error.message);
+      const detail = error.response?.data?.error?.reason ||
+                     error.response?.data?.error?.type ||
+                     (error.response?.data ? JSON.stringify(error.response.data) : '') ||
+                     error.message;
       throw new HttpException(
-        error.response?.data?.error?.reason || 'Error al crear el link de pago en Wompi',
+        `Error Wompi: ${detail}`,
         HttpStatus.BAD_GATEWAY
       );
     }
