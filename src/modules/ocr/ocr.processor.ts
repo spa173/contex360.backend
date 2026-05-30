@@ -226,6 +226,8 @@ export class OcrProcessor {
         GEMINI_TIMEOUT_MS,
       )
     })
+    // Prevent unhandled promise rejection warning in Node/Vitest
+    geminiTimeout.catch(() => {})
 
     let rawLlmText: string
     try {

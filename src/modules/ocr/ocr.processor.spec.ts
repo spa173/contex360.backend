@@ -201,12 +201,12 @@ describe('OcrProcessor', () => {
     // ── P0-4: Gemini timeout tests ──────────────────────────────────────────
 
     it('[P0-4] throws timeout error when Gemini does not respond within 90s', async () => {
-      // Note: this test may emit a Node "PromiseRejectionHandledWarning" — this is a known
-      // Vitest fake-timer artifact with Promise.race (vitest#5003). All assertions are correct.
       // Gemini never resolves
       mockGemini.generateText.mockReturnValue(new Promise(() => {}))
 
       const processPromise = processor.processSync(makeJob())
+      // Prevent unhandled promise rejection warning by attaching a catch handler immediately
+      processPromise.catch(() => {})
 
       // Advance fake timers past the 90s timeout (async advances pending microtasks too)
       await vi.advanceTimersByTimeAsync(91_000)
