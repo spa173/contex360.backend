@@ -78,7 +78,8 @@ function coerceNumber(value: unknown): number | null {
 function coerceString(value: unknown, maxLen = 500): string | null {
   if (value === null || value === undefined) return null
   if (typeof value === 'object') return null
-  const s = String(value).trim()
+  const primitive = value as string | number | boolean
+  const s = String(primitive).trim()
   return s.length > 0 ? s.slice(0, maxLen) : null
 }
 
@@ -219,30 +220,18 @@ function findMatchingBrace(text: string, start: number): number {
 
   for (let j = start; j < len; j++) {
     const ch = text[j]
-
     if (escape) {
       escape = false
-      continue
-    }
-
-    if (inString) {
-      if (ch === '\\') {
-        escape = true
-      } else if (ch === '"') {
-        inString = false
-      }
-      continue
-    }
-
-    if (ch === '"') {
+    } else if (inString) {
+      if (ch === '\\') escape = true
+      else if (ch === '"') inString = false
+    } else if (ch === '"') {
       inString = true
     } else if (ch === '{') {
       depth++
     } else if (ch === '}') {
       depth--
-      if (depth === 0) {
-        return j
-      }
+      if (depth === 0) return j
     }
   }
 
