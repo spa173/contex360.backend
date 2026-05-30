@@ -131,4 +131,11 @@ describe('OcrScheduler.recoverStuckJobs', () => {
     // The top-level try/catch in recoverStuckJobs() absorbs all errors.
     await expect(scheduler.recoverStuckJobs()).resolves.toBeUndefined()
   })
+
+  it('[P0-2] handles audit event creation failure gracefully', async () => {
+    mockPrisma.ocrRun.findMany.mockResolvedValue([makeStuckRun()])
+    mockPrisma.auditEvent.create.mockRejectedValue(new Error('Audit persist error'))
+
+    await expect(scheduler.recoverStuckJobs()).resolves.toBeUndefined()
+  })
 })

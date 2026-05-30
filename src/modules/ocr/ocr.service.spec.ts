@@ -527,6 +527,81 @@ describe('OcrService', () => {
       expect(mockStorage.delete).toHaveBeenCalledWith(expectedKey)
     })
   })
+
+  describe('getStats', () => {
+    it('returns formatted statistics for a tenant', async () => {
+      mockPrisma.ocrRun.count
+        .mockResolvedValueOnce(10) // total
+        .mockResolvedValueOnce(4)  // thisMonth
+      mockPrisma.ocrRun.groupBy.mockResolvedValue([
+        { status: 'processed', _count: { id: 3 } },
+        { status: 'failed', _count: { id: 1 } },
+      ])
+      mockPrisma.ocrRun.aggregate.mockResolvedValue({
+        _avg: { confidence: 0.8524 },
+      })
+
+      const stats = await service.getStats('tenant-1')
+
+      expect(stats.total).toBe(10)
+      expect(stats.thisMonth).toBe(4)
+      expect(stats.byStatus).toEqual({
+        processed: 3,
+        failed: 1,
+      })
+      expect(stats.avgConfidence).toBe(0.852) // 0.8524 rounded to 3 decimals
+    })
+
+    it('returns default avgConfidence if no processed runs exist', async () => {
+      mockPrisma.ocrRun.count.mockResolvedValue(0)
+      mockPrisma.ocrRun.groupBy.mockResolvedValue([])
+      mockPrisma.ocrRun.aggregate.mockResolvedValue({
+        _avg: { confidence: null },
+      })
+
+      const stats = await service.getStats('tenant-1')
+
+      expect(stats.avgConfidence).toBe(0)
+    })
+  })
+
+  describe('createAudit error path', () => {
+    it('logs warning but does not throw when audit event creation fails', async () => {
+      mockUsage.checkLimit.mockResolvedValue({ allowed: true, current: 0, limit: 50 })
+      mockStorage.upload.mockResolvedValue({ url: 'https://cdn.test/file.pdf' })
+      mockPrisma.ocrRun.create.mockResolvedValue({ id: 'ocr-1' })
+      // Make audit event create fail:
+      mockPrisma.auditEvent.create.mockRejectedValue(new Error('Audit DB Down'))
+      mockProcessor.processSync.mockResolvedValue({
+        fields: { vendor: 'XYZ' },
+        confidence: 0.9,
+      })
+
+      // Should not throw exception
+      await expect(
+        service.initiateUpload('tenant-1', 'user-1', makeFile(), {}),
+      ).resolves.toBeDefined()
+    })
+  })
+
+  describe('urlToKey error path', () => {
+    it('skips storage deletion if urlToKey throws on invalid URL', async () => {
+      mockPrisma.ocrRun.findFirst.mockResolvedValue({
+        id:         'ocr-invalid-url',
+        tenantId:   'tenant-1',
+        status:     'processed',
+        fileUrl:    'not-a-valid-url',
+        storageKey: null,
+      })
+      mockPrisma.ocrRun.delete.mockResolvedValue({})
+      mockStorage.delete.mockClear()
+
+      await service.delete('tenant-1', 'ocr-invalid-url')
+
+      // Should not call storage delete because urlToKey returns null on exception
+      expect(mockStorage.delete).not.toHaveBeenCalled()
+    })
+  })
 })
 
 // ── OCR Schema tests ──────────────────────────────────────────────────────────
@@ -604,9 +679,20 @@ describe('parseOcrLlmResponse', () => {
     }
   })
 
-  it('skips items without description', () => {
+  it('defaults confidence to 0.5 and warns if not provided', () => {
+    const result = parseOcrLlmResponse({ items: [] })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.confidence).toBe(0.5)
+      expect(result.warnings).toContain('confidence not provided by LLM — defaulted to 0.5')
+    }
+  })
+
+  it('skips items without description or when item is not an object', () => {
     const raw = {
       items: [
+        null,
+        'string-item',
         { description: '', quantity: 1, unitPrice: 100 },
         { description: 'Válido', quantity: 2, unitPrice: 50 },
       ],
@@ -616,6 +702,22 @@ describe('parseOcrLlmResponse', () => {
     if (result.success) {
       expect(result.data.items).toHaveLength(1)
       expect(result.data.items[0].description).toBe('Válido')
+      expect(result.warnings.some(w => w.includes('is not an object'))).toBe(true)
+    }
+  })
+
+  it('warns when total mismatch is detected', () => {
+    const raw = {
+      items: [],
+      subtotal: 100,
+      taxTotal: 19,
+      total: 150, // subtotal + tax = 119 != 150
+      confidence: 0.9,
+    }
+    const result = parseOcrLlmResponse(raw)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.warnings.some(w => w.includes('Total mismatch'))).toBe(true)
     }
   })
 })

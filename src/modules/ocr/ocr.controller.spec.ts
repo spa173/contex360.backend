@@ -1,10 +1,23 @@
 import { Test } from '@nestjs/testing'
+import { BadRequestException } from '@nestjs/common'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+
+vi.mock('@nestjs/platform-express', async (importOriginal) => {
+  const original = await importOriginal<any>()
+  return {
+    ...original,
+    FileInterceptor: (fieldName: string, options: any) => {
+      (globalThis as any).capturedFileFilter = options?.fileFilter
+      return original.FileInterceptor(fieldName, options)
+    },
+  }
+})
+
+// Import controller AFTER mocking platform-express
 import { OcrController } from './ocr.controller'
 import { OcrService } from './ocr.service'
-import { BadRequestException } from '@nestjs/common'
 import { AuthGuard } from '../auth/auth.guard'
 import { PermissionsGuard } from '../auth/permissions.guard'
-import { describe, it, expect, beforeEach, vi } from 'vitest'
 
 describe('OcrController', () => {
   let controller: OcrController
@@ -82,5 +95,25 @@ describe('OcrController', () => {
     const result = await controller.upload('tenant-1', { sub: 'user-1' } as any, file, { autoCreatePurchase: true })
     expect(mockOcrService.initiateUpload).toHaveBeenCalledWith('tenant-1', 'user-1', file, { autoCreatePurchase: true })
     expect(result).toEqual({ ocrRunId: 'run-1', status: 'processed' })
+  })
+
+  it('should filter files by mimetype correctly', () => {
+    const fileFilter = (globalThis as any).capturedFileFilter
+    expect(fileFilter).toBeDefined()
+    const cb = vi.fn()
+
+    // Allowed mimetype
+    fileFilter(null, { mimetype: 'application/pdf' } as any, cb)
+    expect(cb).toHaveBeenCalledWith(null, true)
+
+    // Allowed image mimetype
+    cb.mockClear()
+    fileFilter(null, { mimetype: 'image/jpeg' } as any, cb)
+    expect(cb).toHaveBeenCalledWith(null, true)
+
+    // Disallowed mimetype
+    cb.mockClear()
+    fileFilter(null, { mimetype: 'text/plain' } as any, cb)
+    expect(cb).toHaveBeenCalledWith(expect.any(BadRequestException), false)
   })
 })
