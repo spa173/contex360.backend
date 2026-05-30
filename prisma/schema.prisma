@@ -380,6 +380,7 @@ model Purchase {
   provider     ThirdParty?    @relation(fields: [providerId], references: [id], onDelete: SetNull)
   items        PurchaseItem[]
   transactions Transaction[]
+  ocrRun       OcrRun?
 
   @@index([tenantId, status])
   @@index([tenantId, issuedAt])
@@ -487,18 +488,49 @@ model InventoryTransfer {
 }
 
 model OcrRun {
-  id            String   @id @default(cuid())
-  tenantId      String
-  source        String
-  sourcePreview String?
-  fields        Json
-  confidence    Float
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                    String    @id @default(cuid())
+  tenantId              String
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Processing state
+  status                String    @default("pending") // pending | processing | processed | failed
+
+  // File metadata
+  fileUrl               String    // Public URL (CDN or direct R2)
+  storageKey            String?   // True R2/local key — source of truth for delete operations.
+                                  // Null for records created before this field was added (P1-2).
+                                  // Always set for new uploads; delete() falls back to urlToKey(fileUrl).
+  sourcePreview         String?   // Thumbnail or preview URL
+  mimeType              String?   // Real MIME type detected from magic bytes
+  fileSizeBytes         Int?      // File size in bytes
+  originalFileName      String?   // Sanitized original file name
+
+  // Extraction result
+  fields                Json      @default("{}")
+  confidence            Float     @default(0)
+  rawLlmResponse        String?   // Raw LLM text for debugging (truncated)
+
+  // Error tracking
+  errorMessage          String?
+  retryCount            Int       @default(0)
+
+  // Performance tracking
+  processingStartedAt   DateTime?
+  processingCompletedAt DateTime?
+
+  // Downstream links
+  purchaseId            String?   @unique // Purchase draft created from this OCR run
+
+  // Legacy field kept for compatibility
+  source                String    @default("")
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  purchase Purchase? @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, createdAt])
+  @@index([tenantId, status])
 }
 
 model UserSecurityProfile {

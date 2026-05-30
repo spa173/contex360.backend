@@ -103,6 +103,7 @@ export class OcrService {
           tenantId,
           status:           'pending',
           fileUrl,
+          storageKey,       // P1-2: persist the true R2/local key alongside the CDN URL
           source:           fileUrl,
           mimeType:         detected.mime,
           fileSizeBytes:    file.size,
@@ -347,8 +348,10 @@ export class OcrService {
       )
     }
 
-    // Delete from storage (best-effort)
-    const key = urlToKey(run.fileUrl)
+    // Delete from storage (best-effort).
+    // P1-2: prefer run.storageKey (the true R2 key, independent of the CDN URL).
+    // Fall back to urlToKey(fileUrl) for records created before storageKey was added.
+    const key = run.storageKey ?? urlToKey(run.fileUrl)
     if (key) {
       this.storage.delete(key).catch((e: Error) =>
         this.logger.warn(`Storage delete failed for ${ocrRunId}: ${e.message}`),
@@ -448,10 +451,15 @@ function sanitizeFilename(name: string): string {
     .slice(0, 200)
 }
 
+/**
+ * Legacy fallback: extract a storage key from a CDN/public URL by stripping
+ * the pathname's leading slash. Only correct when R2_PUBLIC_URL maps directly
+ * to the R2 bucket root (no subdirectory prefix). Prefer run.storageKey when
+ * available (P1-2).
+ */
 function urlToKey(url: string): string | null {
   try {
     const u = new URL(url)
-    // Remove leading slash from pathname
     return u.pathname.slice(1) || null
   } catch {
     return null

@@ -394,6 +394,7 @@ describe('OcrService', () => {
       mockPrisma.ocrRun.findFirst.mockResolvedValue({
         id: 'ocr-1', tenantId: 'tenant-1', status: 'processed',
         fileUrl: 'https://cdn.test/file.pdf',
+        storageKey: null,
       })
       mockPrisma.ocrRun.delete.mockResolvedValue({})
 
@@ -407,10 +408,122 @@ describe('OcrService', () => {
     it('prevents deletion of runs currently processing', async () => {
       mockPrisma.ocrRun.findFirst.mockResolvedValue({
         id: 'ocr-1', status: 'processing', fileUrl: 'https://cdn.test/file.pdf',
+        storageKey: null,
       })
 
       await expect(service.delete('tenant-1', 'ocr-1'))
         .rejects.toThrow(BadRequestException)
+    })
+
+    // ── P1-2: storageKey as source of truth ──────────────────────────────────
+
+    it('[P1-2] delete uses storageKey (not urlToKey) when storageKey is present', async () => {
+      // Scenario: R2_PUBLIC_URL has a CDN subdirectory prefix.
+      // The fileUrl path does NOT match the real R2 key — only storageKey is correct.
+      mockPrisma.ocrRun.findFirst.mockResolvedValue({
+        id:         'ocr-1',
+        tenantId:   'tenant-1',
+        status:     'processed',
+        fileUrl:    'https://files.contex360.com/cdn/tenants/t1/ocr/2026-05/uuid.pdf',
+        storageKey: 'tenants/t1/ocr/2026-05/uuid.pdf',  // ← the real R2 key
+      })
+      mockPrisma.ocrRun.delete.mockResolvedValue({})
+      mockStorage.delete.mockResolvedValue(undefined)
+
+      await service.delete('tenant-1', 'ocr-1')
+
+      // Must use storageKey — NOT the CDN path extracted from fileUrl
+      expect(mockStorage.delete).toHaveBeenCalledWith('tenants/t1/ocr/2026-05/uuid.pdf')
+      expect(mockStorage.delete).not.toHaveBeenCalledWith(
+        expect.stringContaining('cdn/tenants'),
+      )
+    })
+
+    it('[P1-2] delete falls back to urlToKey(fileUrl) for legacy records without storageKey', async () => {
+      // Existing records before this migration have storageKey = null.
+      // The fallback reconstructs the key from the URL pathname (only correct
+      // when R2_PUBLIC_URL maps to the R2 bucket root without a prefix).
+      mockPrisma.ocrRun.findFirst.mockResolvedValue({
+        id:         'ocr-legacy',
+        tenantId:   'tenant-1',
+        status:     'processed',
+        fileUrl:    'https://files.contex360.com/tenants/t1/ocr/2026-05/legacy.pdf',
+        storageKey: null,  // ← legacy record: no storageKey persisted
+      })
+      mockPrisma.ocrRun.delete.mockResolvedValue({})
+      mockStorage.delete.mockResolvedValue(undefined)
+
+      await service.delete('tenant-1', 'ocr-legacy')
+
+      // Fallback extracts pathname from URL (works when CDN root = R2 bucket root)
+      expect(mockStorage.delete).toHaveBeenCalledWith(
+        'tenants/t1/ocr/2026-05/legacy.pdf',
+      )
+    })
+
+    it('[P1-2] delete prefers storageKey over urlToKey even when both would differ', async () => {
+      // Proves that storageKey wins when the CDN URL would produce a different key
+      const storageKey = 'tenants/t1/ocr/2026-05/correct-key.pdf'
+      const wrongKeyFromUrl = 'cdn/tenants/t1/ocr/2026-05/correct-key.pdf'  // CDN prefix
+
+      mockPrisma.ocrRun.findFirst.mockResolvedValue({
+        id:         'ocr-1',
+        tenantId:   'tenant-1',
+        status:     'failed',
+        fileUrl:    `https://files.contex360.com/${wrongKeyFromUrl}`,
+        storageKey,
+      })
+      mockPrisma.ocrRun.delete.mockResolvedValue({})
+      mockStorage.delete.mockResolvedValue(undefined)
+
+      await service.delete('tenant-1', 'ocr-1')
+
+      expect(mockStorage.delete).toHaveBeenCalledWith(storageKey)
+      expect(mockStorage.delete).not.toHaveBeenCalledWith(wrongKeyFromUrl)
+    })
+  })
+
+  // ── initiateUpload — storageKey persistence (P1-2) ─────────────────────────
+
+  describe('initiateUpload — storageKey persistence (P1-2)', () => {
+    it('[P1-2] persists storageKey in ocrRun.create at upload time', async () => {
+      const expectedKey = 'tenants/tenant-1/ocr/2026-05/some-uuid.pdf'
+      mockStorage.buildKey.mockReturnValue(expectedKey)
+      mockUsage.checkLimit.mockResolvedValue({ allowed: true, current: 0, limit: 50 })
+      mockStorage.upload.mockResolvedValue({ url: 'https://cdn.test/file.pdf' })
+      mockPrisma.ocrRun.create.mockResolvedValue({ id: 'ocr-new' })
+      mockPrisma.auditEvent.create.mockResolvedValue({})
+      mockProcessor.processSync.mockResolvedValue({
+        fields: { vendor: 'Test', total: 1000 }, confidence: 0.9,
+        purchaseId: undefined, rawLlmPreview: '{}', warnings: [],
+      })
+
+      await service.initiateUpload('tenant-1', 'user-1', makeFile(), {})
+
+      // storageKey must be persisted in the create call
+      expect(mockPrisma.ocrRun.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            storageKey: expectedKey,
+          }),
+        }),
+      )
+    })
+
+    it('[P1-2] P0-1 rollback uses storageKey (not fileUrl) when DB write fails', async () => {
+      const expectedKey = 'tenants/tenant-1/ocr/2026-05/rollback-uuid.pdf'
+      mockStorage.buildKey.mockReturnValue(expectedKey)
+      mockUsage.checkLimit.mockResolvedValue({ allowed: true, current: 0, limit: 50 })
+      mockStorage.upload.mockResolvedValue({ url: 'https://cdn.test/file.pdf' })
+      mockStorage.delete.mockResolvedValue(undefined)
+      mockPrisma.ocrRun.create.mockRejectedValue(new Error('DB timeout'))
+
+      await expect(
+        service.initiateUpload('tenant-1', 'user-1', makeFile(), {}),
+      ).rejects.toThrow(BadRequestException)
+
+      // Rollback must delete the exact storageKey, not a URL-derived key
+      expect(mockStorage.delete).toHaveBeenCalledWith(expectedKey)
     })
   })
 })
