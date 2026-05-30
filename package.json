@@ -15,7 +15,6 @@
     "postbuild": "prisma generate",
     "start": "node --max-old-space-size=384 dist/main.js",
     "start:prod": "node --max-old-space-size=384 dist/main.js",
-    "render:build": "NODE_OPTIONS='--max-old-space-size=450' npm install && NODE_OPTIONS='--max-old-space-size=450' npm run build",
     "db:setup": "node scripts/setup-dev-db.js",
     "db:stop": "node scripts/stop-dev-db.js",
     "db:migrate": "prisma migrate dev --name init",

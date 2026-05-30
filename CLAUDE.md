@@ -28,7 +28,7 @@ El **Backend** es una API REST robusta construida con NestJS y Prisma, que manej
 *   **ORM:** Prisma
 *   **Testing:** Vitest / Jest (Vitest configurado en `vitest.config.ts`)
 *   **Linter/Logger:** NestJS Pino Logger, Pino
-*   **Despliegue:** Hugging Face Spaces (Docker) / Railway / Render
+*   **Despliegue:** Hugging Face Spaces (Docker)
 
 ---
 
