@@ -45,6 +45,8 @@ import { PrivacyModule } from './modules/privacy/privacy.module'
 import { TaxesModule } from './modules/taxes/taxes.module'
 import { ContratosModule } from './modules/contratos/contratos.module'
 import { ApiModule } from './modules/api/api.module'
+import { OcrModule } from './modules/ocr/ocr.module'
+import { StorageModule } from './common/storage/storage.module'
 
 @Module({
   imports: [
@@ -89,6 +91,8 @@ import { ApiModule } from './modules/api/api.module'
     TaxesModule,
     ContratosModule,
     ApiModule,
+    StorageModule,
+    OcrModule,
   ],
   controllers: [AppController],
   providers: [

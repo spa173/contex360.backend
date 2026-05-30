@@ -355,9 +355,11 @@ export class AnalyticsService {
       data: {
         tenantId,
         source: selected.source,
+        fileUrl: `https://cdn.test/${selected.source}`,
         sourcePreview: selected.sourcePreview,
         confidence: selected.confidence,
         fields: selected.fields,
+        status: 'processed', // simulated runs are immediately processed
       },
     });
 
