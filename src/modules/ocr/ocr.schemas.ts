@@ -180,9 +180,25 @@ export function extractJsonFromLlmText(text: string): unknown {
   if (!text) return null
 
   // 1. Markdown fence — highest priority (Gemini 2.5 reliably uses this)
-  const fenceMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/)
-  if (fenceMatch) {
-    try { return JSON.parse(fenceMatch[1].trim()) } catch { /* fall through to brace parser */ }
+  // Replaced regex with safe, linear indexOf parsing to eliminate ReDoS / backtracking vulnerability
+  let startIdx = text.indexOf('```json')
+  let headerLen = 7
+  if (startIdx === -1) {
+    startIdx = text.indexOf('```')
+    headerLen = 3
+  }
+
+  if (startIdx !== -1) {
+    const searchFrom = startIdx + headerLen
+    const endIdx = text.indexOf('```', searchFrom)
+    if (endIdx !== -1) {
+      const content = text.slice(searchFrom, endIdx).trim()
+      try {
+        return JSON.parse(content)
+      } catch {
+        // fall through to brace parser
+      }
+    }
   }
 
   // 2. Brace-balancing parser (P1-5: replaces firstIndexOf/lastIndexOf)
