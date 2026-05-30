@@ -358,7 +358,7 @@ export class OcrProcessor {
     // Provider NIT lookup — best-effort, failure returns null (does not abort the TX)
     let providerId: string | null = null
     if (fields.vendorNit) {
-      const nitDigits = fields.vendorNit.replace(/[^0-9]/g, '')
+      const nitDigits = fields.vendorNit.replace(/\D/g, '')
       if (nitDigits.length >= 9) {
         try {
           const provider = await tx.thirdParty.findFirst({
@@ -431,7 +431,7 @@ export class OcrProcessor {
       throw new Error(`Storage fetch failed (HTTP ${response.status}) for re-processing`)
     }
     const contentLength = response.headers.get('content-length')
-    if (contentLength && parseInt(contentLength) > MAX_BYTES) {
+    if (contentLength && Number.parseInt(contentLength) > MAX_BYTES) {
       throw new Error(`File too large to re-fetch for processing: ${contentLength} bytes`)
     }
     const ab = await response.arrayBuffer()

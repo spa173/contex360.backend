@@ -7,7 +7,7 @@
  * These validators protect the database from malformed LLM responses.
  */
 
-import type { OcrExtractedFields, OcrLineItem, OcrLlmResponse, DetectedMime } from './ocr.types'
+import type { OcrLineItem, OcrLlmResponse, DetectedMime } from './ocr.types'
 
 // ── Allowed MIME types ────────────────────────────────────────────────────────
 

@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config'
 import { mkdir, writeFile, unlink } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { tmpdir } from 'node:os'
 import type { IStorageProvider, UploadedFile } from './storage.interface'
 
 /**
@@ -18,12 +17,12 @@ export class LocalStorageProvider implements IStorageProvider {
   private readonly baseUrl: string
 
   constructor(private readonly config: ConfigService) {
-    this.baseDir = join(tmpdir(), 'contex360-uploads')
+    this.baseDir = join(process.cwd(), 'uploads')
     this.baseUrl = config.get<string>('LOCAL_STORAGE_BASE_URL', 'http://localhost:3000/uploads')
   }
 
   async upload(key: string, buffer: Buffer, mimeType: string): Promise<UploadedFile> {
-    const filePath = join(this.baseDir, key.replace(/\//g, '_'))
+    const filePath = join(this.baseDir, key.replaceAll('/', '_'))
     const dir = filePath.substring(0, filePath.lastIndexOf('_'))
 
     if (!existsSync(this.baseDir)) {
@@ -42,7 +41,7 @@ export class LocalStorageProvider implements IStorageProvider {
   }
 
   async delete(key: string): Promise<void> {
-    const filePath = join(this.baseDir, key.replace(/\//g, '_'))
+    const filePath = join(this.baseDir, key.replaceAll('/', '_'))
     try {
       await unlink(filePath)
     } catch {
