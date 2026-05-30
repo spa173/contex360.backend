@@ -50,8 +50,8 @@ describe('R2StorageProvider', () => {
     expect(calledUrl).toBe('https://test-account.r2.cloudflarestorage.com/test-bucket/test-key.txt')
     expect(calledOptions.method).toBe('PUT')
     expect(calledOptions.body).toBe(buffer)
-    expect(calledOptions.headers).toBeDefined()
-    expect(calledOptions.headers?.['Authorization']).toContain('AWS4-HMAC-SHA256')
+    const headers = calledOptions.headers as any
+    expect(headers?.['Authorization']).toContain('AWS4-HMAC-SHA256')
 
     expect(result.url).toBe('https://files.test.com/test-key.txt')
     expect(result.key).toBe(key)
