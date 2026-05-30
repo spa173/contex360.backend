@@ -95,7 +95,7 @@ export function resolveAllowedRedirectTo(redirectTo?: string) {
 
 function resolveBackendBaseUrl() {
   const fallback = isProduction()
-    ? 'https://contex360-backend.onrender.com'
+    ? 'https://spartan173-contex.hf.space'
     : `http://localhost:${env('PORT', '3001')}`
 
   return normalizeUrl(env('BACKEND_PUBLIC_URL', fallback))
