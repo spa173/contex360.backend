@@ -6,6 +6,7 @@ import { PrismaService } from '../database/prisma.service'
 import { UsageService } from '../usage/usage.service'
 import { OcrProcessor } from './ocr.processor'
 import { STORAGE_PROVIDER } from '../../common/storage/storage.interface'
+import { detectMimeFromBuffer, parseOcrLlmResponse, extractJsonFromLlmText, balancedJsonExtract } from './ocr.schemas'
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -531,38 +532,33 @@ describe('OcrService', () => {
 // ── OCR Schema tests ──────────────────────────────────────────────────────────
 
 describe('detectMimeFromBuffer', () => {
-  it('detects PDF from magic bytes', async () => {
-    const { detectMimeFromBuffer } = await import('./ocr.schemas')
+  it('detects PDF from magic bytes', () => {
     const buf = Buffer.from([0x25, 0x50, 0x44, 0x46])
     const result = detectMimeFromBuffer(buf)
     expect(result?.mime).toBe('application/pdf')
     expect(result?.ext).toBe('pdf')
   })
 
-  it('detects JPEG from magic bytes', async () => {
-    const { detectMimeFromBuffer } = await import('./ocr.schemas')
+  it('detects JPEG from magic bytes', () => {
     const buf = Buffer.from([0xFF, 0xD8, 0xFF, 0xE0])
     const result = detectMimeFromBuffer(buf)
     expect(result?.mime).toBe('image/jpeg')
   })
 
-  it('detects PNG from magic bytes', async () => {
-    const { detectMimeFromBuffer } = await import('./ocr.schemas')
+  it('detects PNG from magic bytes', () => {
     const buf = Buffer.from([0x89, 0x50, 0x4E, 0x47])
     const result = detectMimeFromBuffer(buf)
     expect(result?.mime).toBe('image/png')
   })
 
-  it('returns null for unknown buffer', async () => {
-    const { detectMimeFromBuffer } = await import('./ocr.schemas')
+  it('returns null for unknown buffer', () => {
     const buf = Buffer.from([0x00, 0x01, 0x02, 0x03])
     expect(detectMimeFromBuffer(buf)).toBeNull()
   })
 })
 
 describe('parseOcrLlmResponse', () => {
-  it('parses valid LLM response correctly', async () => {
-    const { parseOcrLlmResponse } = await import('./ocr.schemas')
+  it('parses valid LLM response correctly', () => {
     const raw = {
       vendor: 'Proveedor SAS',
       vendorNit: '900123456-7',
@@ -595,23 +591,20 @@ describe('parseOcrLlmResponse', () => {
     }
   })
 
-  it('rejects non-object input', async () => {
-    const { parseOcrLlmResponse } = await import('./ocr.schemas')
+  it('rejects non-object input', () => {
     expect(parseOcrLlmResponse('string')).toMatchObject({ success: false })
     expect(parseOcrLlmResponse(null)).toMatchObject({ success: false })
     expect(parseOcrLlmResponse([1, 2])).toMatchObject({ success: false })
   })
 
-  it('clamps confidence to [0, 1]', async () => {
-    const { parseOcrLlmResponse } = await import('./ocr.schemas')
+  it('clamps confidence to [0, 1]', () => {
     const result = parseOcrLlmResponse({ confidence: 5.5, items: [] })
     if (result.success) {
       expect(result.data.confidence).toBe(1)
     }
   })
 
-  it('skips items without description', async () => {
-    const { parseOcrLlmResponse } = await import('./ocr.schemas')
+  it('skips items without description', () => {
     const raw = {
       items: [
         { description: '', quantity: 1, unitPrice: 100 },
@@ -628,22 +621,19 @@ describe('parseOcrLlmResponse', () => {
 })
 
 describe('extractJsonFromLlmText — markdown fence path (existing)', () => {
-  it('extracts JSON from markdown fence', async () => {
-    const { extractJsonFromLlmText } = await import('./ocr.schemas')
+  it('extracts JSON from markdown fence', () => {
     const text = 'Aquí está el resultado:\n```json\n{"vendor":"ACME","total":119000}\n```'
     const result = extractJsonFromLlmText(text)
     expect(result).toMatchObject({ vendor: 'ACME', total: 119000 })
   })
 
-  it('extracts bare JSON object from prose', async () => {
-    const { extractJsonFromLlmText } = await import('./ocr.schemas')
+  it('extracts bare JSON object from prose', () => {
     const text = 'El documento contiene: {"vendor":"Test","total":50000} según el análisis.'
     const result = extractJsonFromLlmText(text)
     expect(result).toMatchObject({ vendor: 'Test' })
   })
 
-  it('returns null when no JSON found', async () => {
-    const { extractJsonFromLlmText } = await import('./ocr.schemas')
+  it('returns null when no JSON found', () => {
     expect(extractJsonFromLlmText('No hay JSON aquí')).toBeNull()
   })
 })
@@ -652,14 +642,8 @@ describe('extractJsonFromLlmText — markdown fence path (existing)', () => {
 
 describe('balancedJsonExtract (P1-5 — brace-balancing parser)', () => {
   // Import both functions once for the describe block
-  let extract: typeof import('./ocr.schemas').balancedJsonExtract
-  let extractFull: typeof import('./ocr.schemas').extractJsonFromLlmText
-
-  beforeEach(async () => {
-    const mod = await import('./ocr.schemas')
-    extract = mod.balancedJsonExtract
-    extractFull = mod.extractJsonFromLlmText
-  })
+  let extract = balancedJsonExtract
+  let extractFull = extractJsonFromLlmText
 
   // ── Core correctness ───────────────────────────────────────────────────────
 

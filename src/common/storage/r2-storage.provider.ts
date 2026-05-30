@@ -39,7 +39,7 @@ export class R2StorageProvider implements IStorageProvider {
     const response = await fetch(url, {
       method: 'PUT',
       headers,
-      body: buffer,
+      body: buffer as any,
       signal: AbortSignal.timeout(30_000),
     })
 
