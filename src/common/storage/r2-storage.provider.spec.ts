@@ -6,6 +6,16 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 describe('R2StorageProvider', () => {
   let provider: R2StorageProvider
   const mockConfig = {
+    get: vi.fn((key: string) => {
+      const configMap: Record<string, string> = {
+        R2_ENDPOINT: 'https://test-account.r2.cloudflarestorage.com',
+        R2_ACCESS_KEY_ID: 'test-access-key-id',
+        R2_SECRET_ACCESS_KEY: 'test-secret-access-key',
+        R2_BUCKET: 'test-bucket',
+        R2_PUBLIC_URL: 'https://files.test.com',
+      }
+      return configMap[key]
+    }),
     getOrThrow: vi.fn((key: string) => {
       const configMap: Record<string, string> = {
         R2_ENDPOINT: 'https://test-account.r2.cloudflarestorage.com',
