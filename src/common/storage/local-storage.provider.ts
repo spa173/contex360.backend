@@ -23,7 +23,6 @@ export class LocalStorageProvider implements IStorageProvider {
 
   async upload(key: string, buffer: Buffer, mimeType: string): Promise<UploadedFile> {
     const filePath = join(this.baseDir, key.replaceAll('/', '_'))
-    const dir = filePath.substring(0, filePath.lastIndexOf('_'))
 
     if (!existsSync(this.baseDir)) {
       await mkdir(this.baseDir, { recursive: true })

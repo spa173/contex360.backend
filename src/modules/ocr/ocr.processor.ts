@@ -161,9 +161,12 @@ export class OcrProcessor {
       const nextAttempt = attempt + 1
       const willRetry   = nextAttempt < MAX_RETRIES
 
+      const retryMsg = willRetry
+        ? `retrying in ${RETRY_DELAYS_MS[attempt]}ms`
+        : 'no more retries'
+
       this.logger.warn(
-        `OcrRun ${job.ocrRunId} attempt ${attempt + 1} failed: ${e.message} ` +
-        `(${willRetry ? `retrying in ${RETRY_DELAYS_MS[attempt]}ms` : 'no more retries'})`,
+        `OcrRun ${job.ocrRunId} attempt ${attempt + 1} failed: ${e.message} (${retryMsg})`,
       )
 
       await this.prisma.ocrRun.update({
@@ -210,11 +213,9 @@ export class OcrProcessor {
       throw new Error('OcrJob must provide either fileBuffer or fileUrl')
     }
 
-    // Convert buffer to base64 data URI for Gemini Vision, then null the reference
-    // so the buffer is eligible for GC once encoding is complete.
+    // Convert buffer to base64 data URI for Gemini Vision.
     const base64  = fileBuffer.toString('base64')
     const dataUri = `data:${mimeType};base64,${base64}`
-    fileBuffer    = null as unknown as Buffer  // hint GC
 
     // 3. Call Gemini with explicit timeout (P0-4: prevents infinite hang)
     // clearTimeout in finally cancels the timer whether Gemini wins or times out,

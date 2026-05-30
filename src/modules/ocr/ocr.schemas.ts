@@ -72,11 +72,12 @@ type SafeParseResult<T> =
 function coerceNumber(value: unknown): number | null {
   if (value === null || value === undefined) return null
   const n = Number(value)
-  return isNaN(n) ? null : n
+  return Number.isNaN(n) ? null : n
 }
 
 function coerceString(value: unknown, maxLen = 500): string | null {
   if (value === null || value === undefined) return null
+  if (typeof value === 'object') return null
   const s = String(value).trim()
   return s.length > 0 ? s.slice(0, maxLen) : null
 }
@@ -127,7 +128,7 @@ export function parseOcrLlmResponse(raw: unknown): SafeParseResult<OcrLlmRespons
 
   // Confidence — clamp to [0, 1]
   const rawConfidence = coerceNumber(obj.confidence)
-  const confidence = rawConfidence !== null ? clamp(rawConfidence, 0, 1) : 0.5
+  const confidence = rawConfidence === null ? 0.5 : clamp(rawConfidence, 0, 1)
 
   if (rawConfidence === null) {
     warnings.push('confidence not provided by LLM — defaulted to 0.5')
@@ -206,6 +207,49 @@ export function extractJsonFromLlmText(text: string): unknown {
 }
 
 /**
+ * Scans from the opening brace `{` at `start` to find the index of the matching
+ * closing brace `}`, ignoring braces inside string literals.
+ * Returns the index of the matching closing brace, or -1 if not found.
+ */
+function findMatchingBrace(text: string, start: number): number {
+  const len = text.length
+  let depth = 0
+  let inString = false
+  let escape = false
+
+  for (let j = start; j < len; j++) {
+    const ch = text[j]
+
+    if (escape) {
+      escape = false
+      continue
+    }
+
+    if (inString) {
+      if (ch === '\\') {
+        escape = true
+      } else if (ch === '"') {
+        inString = false
+      }
+      continue
+    }
+
+    if (ch === '"') {
+      inString = true
+    } else if (ch === '{') {
+      depth++
+    } else if (ch === '}') {
+      depth--
+      if (depth === 0) {
+        return j
+      }
+    }
+  }
+
+  return -1
+}
+
+/**
  * Scans `text` left-to-right for the first complete JSON object `{…}` using a
  * brace-depth counter that correctly ignores `{` and `}` inside string literals.
  *
@@ -223,54 +267,22 @@ export function balancedJsonExtract(text: string): unknown {
   let scanFrom = 0
 
   while (scanFrom < len) {
-    // Find the next opening brace at depth 0
     const start = text.indexOf('{', scanFrom)
-    if (start === -1) return null   // no more candidates
+    if (start === -1) return null
 
-    let depth    = 0
-    let inString = false
-    let escape   = false
-
-    for (let j = start; j < len; j++) {
-      const ch = text[j]
-
-      // ── Escape state: consume one character, return to IN_STRING ──────────
-      if (escape) {
-        escape = false
-        continue
-      }
-
-      // ── IN_STRING: only look for \ and closing " ──────────────────────────
-      if (inString) {
-        if (ch === '\\') { escape = true;  continue }
-        if (ch === '"')  { inString = false; continue }
-        continue   // { and } inside strings are literals — ignore
-      }
-
-      // ── NORMAL state ───────────────────────────────────────────────────────
-      if      (ch === '"') { inString = true; continue }
-      else if (ch === '{') { depth++ }
-      else if (ch === '}') {
-        depth--
-        if (depth === 0) {
-          // Balanced candidate found — try to parse it
-          const candidate = text.slice(start, j + 1)
-          try {
-            return JSON.parse(candidate)
-          } catch {
-            // Invalid JSON (e.g. unquoted keys, trailing commas) — skip past
-            // this candidate and look for the next `{` in the remaining text
-            scanFrom = j + 1
-            break  // restart outer while
-          }
-        }
-      }
+    const end = findMatchingBrace(text, start)
+    if (end === -1) {
+      // The brace did not close — truncated JSON, no other candidate possible
+      return null
     }
 
-    // Inner loop ended without finding a balanced close:
-    // depth > 0 means the JSON was truncated — no more candidates possible
-    if (depth !== 0) return null
-    // depth === 0 means we broke out after a failed parse (scanFrom updated)
+    const candidate = text.slice(start, end + 1)
+    try {
+      return JSON.parse(candidate)
+    } catch {
+      // Invalid JSON — skip past this candidate and search again
+      scanFrom = end + 1
+    }
   }
 
   return null

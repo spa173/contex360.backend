@@ -82,7 +82,7 @@ export class R2StorageProvider implements IStorageProvider {
     body: Buffer,
   ): Promise<Record<string, string>> {
     const now = new Date()
-    const dateStr = now.toISOString().replace(/[:\-]|\.\d{3}/g, '').slice(0, 15) + 'Z' // 20260529T143000Z
+    const dateStr = now.toISOString().replace(/[:-]|\.\d{3}/g, '').slice(0, 15) + 'Z' // 20260529T143000Z
     const dateOnly = dateStr.slice(0, 8) // 20260529
 
     const bodyHash = createHash('sha256').update(body).digest('hex')
