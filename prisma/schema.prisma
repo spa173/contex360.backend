@@ -118,42 +118,42 @@ model User {
 }
 
 model Tenant {
-  id                      String              @id @default(cuid())
+  id                      String                @id @default(cuid())
   name                    String
-  prefix                  String              @unique
+  prefix                  String                @unique
   nit                     String?
   address                 String?
   phone                   String?
-  allowNegativeStock      Boolean             @default(false)
+  allowNegativeStock      Boolean               @default(false)
   sector                  String?
   city                    String?
   costMethod              String?
   dianStatus              String?
   securitySettings        Json
-  invoicePrefix           String              @default("FV")
-  lastInvoiceNumber       Int                 @default(0)
+  invoicePrefix           String                @default("FV")
+  lastInvoiceNumber       Int                   @default(0)
   invoiceResolution       String?
   resolutionFrom          DateTime?
   resolutionTo            DateTime?
-  purchasePrefix          String              @default("CO")
-  lastPurchaseNumber      Int                 @default(0)
-  dianEnvironment         String              @default("test") // test | production
+  purchasePrefix          String                @default("CO")
+  lastPurchaseNumber      Int                   @default(0)
+  dianEnvironment         String                @default("test") // test | production
   dianTestSetId           String?
   dianSoftwareId          String?
   dianSoftwarePin         String?
   dianCertificate         String? // Base64 del certificado
   dianCertificatePassword String?
   dianNit                 String? // NIT para env��o DIAN
-  dianOperationCode       String              @default("10") // 10: factura ordinaria
+  dianOperationCode       String                @default("10") // 10: factura ordinaria
   smtpHost                String?
   smtpPort                Int?
   smtpUser                String?
   smtpPassword            String?
   smtpFromEmail           String?
-  activeIntegrations      String[]            @default([])
-  adminSettings           Json                @default("{}")
-  createdAt               DateTime            @default(now())
-  updatedAt               DateTime            @updatedAt
+  activeIntegrations      String[]              @default([])
+  adminSettings           Json                  @default("{}")
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
   onboardingCompletedAt   DateTime?
   memberships             Membership[]
   thirdParties            ThirdParty[]
@@ -488,43 +488,43 @@ model InventoryTransfer {
 }
 
 model OcrRun {
-  id                    String    @id @default(cuid())
-  tenantId              String
+  id       String @id @default(cuid())
+  tenantId String
 
   // Processing state
-  status                String    @default("pending") // pending | processing | processed | failed
+  status String @default("pending") // pending | processing | processed | failed
 
   // File metadata
-  fileUrl               String    // Public URL (CDN or direct R2)
-  storageKey            String?   // True R2/local key — source of truth for delete operations.
-                                  // Null for records created before this field was added (P1-2).
-                                  // Always set for new uploads; delete() falls back to urlToKey(fileUrl).
-  sourcePreview         String?   // Thumbnail or preview URL
-  mimeType              String?   // Real MIME type detected from magic bytes
-  fileSizeBytes         Int?      // File size in bytes
-  originalFileName      String?   // Sanitized original file name
+  fileUrl          String // Public URL (CDN or direct R2)
+  storageKey       String? // True R2/local key — source of truth for delete operations.
+  // Null for records created before this field was added (P1-2).
+  // Always set for new uploads; delete() falls back to urlToKey(fileUrl).
+  sourcePreview    String? // Thumbnail or preview URL
+  mimeType         String? // Real MIME type detected from magic bytes
+  fileSizeBytes    Int? // File size in bytes
+  originalFileName String? // Sanitized original file name
 
   // Extraction result
-  fields                Json      @default("{}")
-  confidence            Float     @default(0)
-  rawLlmResponse        String?   // Raw LLM text for debugging (truncated)
+  fields         Json    @default("{}")
+  confidence     Float   @default(0)
+  rawLlmResponse String? // Raw LLM text for debugging (truncated)
 
   // Error tracking
-  errorMessage          String?
-  retryCount            Int       @default(0)
+  errorMessage String?
+  retryCount   Int     @default(0)
 
   // Performance tracking
   processingStartedAt   DateTime?
   processingCompletedAt DateTime?
 
   // Downstream links
-  purchaseId            String?   @unique // Purchase draft created from this OCR run
+  purchaseId String? @unique // Purchase draft created from this OCR run
 
   // Legacy field kept for compatibility
-  source                String    @default("")
+  source String @default("")
 
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   purchase Purchase? @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
@@ -737,29 +737,29 @@ model Subscription {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @default(now()) @updatedAt
 
-  tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  payments            Payment[]
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payments             Payment[]
   subscriptionInvoices SubscriptionInvoice[]
 
   @@unique([tenantId])
 }
 
 model Payment {
-  id                String   @id @default(cuid())
-  tenantId          String
-  subscriptionId    String?
-  wompiTransactionId String?  @unique
-  amount            Int
-  currency          String   @default("COP")
-  status            String   @default("pending")
-  paymentMethod     String?
-  planType          String?
-  billing           String?
-  description       String?
-  paidAt            DateTime?
-  processedAt       DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  tenantId           String
+  subscriptionId     String?
+  wompiTransactionId String?   @unique
+  amount             Int
+  currency           String    @default("COP")
+  status             String    @default("pending")
+  paymentMethod      String?
+  planType           String?
+  billing            String?
+  description        String?
+  paidAt             DateTime?
+  processedAt        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   tenant              Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   subscription        Subscription?        @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
@@ -769,30 +769,30 @@ model Payment {
 }
 
 model SubscriptionInvoice {
-  id              String   @id @default(cuid())
-  tenantId        String
-  subscriptionId  String
-  paymentId       String?  @unique
-  invoiceNumber   String   @unique
-  amount          Int
-  tax             Int      @default(0)
-  total           Int
-  status          String   @default("pending")
-  cufe            String?
-  dianStatus      String?
-  xmlFileName     String?
-  timeline        Json?
-  planType        String
-  billing         String
-  periodStart     DateTime
-  periodEnd       DateTime
-  paidAt          DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id             String    @id @default(cuid())
+  tenantId       String
+  subscriptionId String
+  paymentId      String?   @unique
+  invoiceNumber  String    @unique
+  amount         Int
+  tax            Int       @default(0)
+  total          Int
+  status         String    @default("pending")
+  cufe           String?
+  dianStatus     String?
+  xmlFileName    String?
+  timeline       Json?
+  planType       String
+  billing        String
+  periodStart    DateTime
+  periodEnd      DateTime
+  paidAt         DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
-  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  subscription Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-  payment      Payment?      @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  payment      Payment?     @relation(fields: [paymentId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, createdAt])
 }
@@ -822,22 +822,22 @@ model HelpArticle {
 }
 
 model Consentimiento {
-  id             String   @id @default(cuid())
-  tenantId       String
-  userId         String
-  type           ConsentimientoTipo
-  estado         ConsentimientoEstado @default(sinConsentir)
-  version        String   @default("1.0")
-  fecha          DateTime @default(now())
-  ip             String?
-  dispositivo    String?
-  browser        String?
-  hashConsent    String   @unique
+  id               String               @id @default(cuid())
+  tenantId         String
+  userId           String
+  type             ConsentimientoTipo
+  estado           ConsentimientoEstado @default(sinConsentir)
+  version          String               @default("1.0")
+  fecha            DateTime             @default(now())
+  ip               String?
+  dispositivo      String?
+  browser          String?
+  hashConsent      String               @unique
   datosAdicionales Json?
-  
-  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  usuario        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+
+  tenant  Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  usuario User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([tenantId, userId, type])
   @@index([type, estado])
 }
@@ -862,23 +862,23 @@ enum ConsentimientoEstado {
 }
 
 model SolicitudDerechos {
-  id             String           @id @default(cuid())
-  tenantId       String
-  userId         String
-  tipo           TipoSolicitudDerechos
-  estado         SolicitudEstado   @default(recibida)
-  fechaSolicitud DateTime         @default(now())
-  fechaResolucion DateTime?
-  solicitante    String
+  id               String                @id @default(cuid())
+  tenantId         String
+  userId           String
+  tipo             TipoSolicitudDerechos
+  estado           SolicitudEstado       @default(recibida)
+  fechaSolicitud   DateTime              @default(now())
+  fechaResolucion  DateTime?
+  solicitante      String
   emailSolicitante String
-  ip             String?
-  
-  documentos     DocumentoDerechos[]
-  comentarios    ComentarioDerechos[]
-  
-  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  usuario        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  ip               String?
+
+  documentos  DocumentoDerechos[]
+  comentarios ComentarioDerechos[]
+
+  tenant  Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  usuario User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([tenantId, tipo, estado])
   @@index([userId, fechaSolicitud])
 }
@@ -902,44 +902,44 @@ enum SolicitudEstado {
 }
 
 model DocumentoDerechos {
-  id             String   @id @default(cuid())
-  solicitudId    String
-  tipo           String
-  archivoUrl     String
-  hashArchivo    String
-  fecha          DateTime @default(now())
-  
-  solicitud      SolicitudDerechos @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
-  
+  id          String   @id @default(cuid())
+  solicitudId String
+  tipo        String
+  archivoUrl  String
+  hashArchivo String
+  fecha       DateTime @default(now())
+
+  solicitud SolicitudDerechos @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+
   @@index([solicitudId])
 }
 
 model ComentarioDerechos {
-  id             String   @id @default(cuid())
-  solicitudId    String
-  comentario     String
-  fecha          DateTime @default(now())
-  usuarioId      String?
-  
-  solicitud      SolicitudDerechos @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
-  
+  id          String   @id @default(cuid())
+  solicitudId String
+  comentario  String
+  fecha       DateTime @default(now())
+  usuarioId   String?
+
+  solicitud SolicitudDerechos @relation(fields: [solicitudId], references: [id], onDelete: Cascade)
+
   @@index([solicitudId])
 }
 
 model Contrato {
-  id          String        @id @default(cuid())
+  id          String       @id @default(cuid())
   tenantId    String?
   tipo        TipoContrato
   version     String
   titulo      String
   cuerpo      String
-  hash        String        @unique
+  hash        String       @unique
   publicadoEn DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 
   aceptaciones ContratoAceptacion[]
-  tenant       Tenant?             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant       Tenant?              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, tipo, version])
   @@index([tenantId])
@@ -955,15 +955,15 @@ enum TipoContrato {
 }
 
 model ContratoAceptacion {
-  id          String   @id @default(cuid())
-  contratoId  String
-  userId      String
-  tenantId    String?
-  firma       String   @unique
-  ip          String?
-  dispositivo String?
+  id              String   @id @default(cuid())
+  contratoId      String
+  userId          String
+  tenantId        String?
+  firma           String   @unique
+  ip              String?
+  dispositivo     String?
   geolocalizacion String?
-  aceptadoEn  DateTime @default(now())
+  aceptadoEn      DateTime @default(now())
 
   contrato Contrato @relation(fields: [contratoId], references: [id], onDelete: Cascade)
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -983,7 +983,7 @@ model HelpFaq {
 
 model UptimeEvent {
   id             String   @id @default(cuid())
-  status         String   // up | degraded | down
+  status         String // up | degraded | down
   responseTimeMs Int?
   error          String?
   checkedAt      DateTime @default(now())
@@ -996,7 +996,7 @@ model Incident {
   id          String    @id @default(cuid())
   title       String
   description String
-  severity    String    // minor | major | critical
+  severity    String // minor | major | critical
   status      String    @default("open") // open | investigating | resolved | closed
   startedAt   DateTime
   endedAt     DateTime?
@@ -1008,11 +1008,11 @@ model Incident {
 }
 
 model UsageRecord {
-  id          String   @id @default(cuid())
-  tenantId    String
-  feature     String   // invoice_created | ai_query | ocr_run | email_sent | user_active
-  quantity    Int      @default(1)
-  recordedAt  DateTime @default(now())
+  id         String   @id @default(cuid())
+  tenantId   String
+  feature    String // invoice_created | ai_query | ocr_run | email_sent | user_active
+  quantity   Int      @default(1)
+  recordedAt DateTime @default(now())
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -1021,15 +1021,15 @@ model UsageRecord {
 }
 
 model ApiKey {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   tenantId  String
   name      String
-  key       String   @unique
+  key       String    @unique
   lastUsed  DateTime?
   expiresAt DateTime?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -1038,18 +1038,18 @@ model ApiKey {
 }
 
 model Webhook {
-  id        String   @id @default(cuid())
-  tenantId  String
-  name      String
-  url       String
-  events    String[]
-  active    Boolean  @default(true)
-  secret    String?
-  lastSent  DateTime?
+  id         String    @id @default(cuid())
+  tenantId   String
+  name       String
+  url        String
+  events     String[]
+  active     Boolean   @default(true)
+  secret     String?
+  lastSent   DateTime?
   lastStatus String?
-  retryCount Int     @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  retryCount Int       @default(0)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 

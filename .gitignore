@@ -21,9 +21,16 @@ auth.json
 
 # --- 2. AI AGENTS & TOOLS (Archivos de IA) ---
 # Evitar subir configuraciones locales, permisos o historial de agentes de IA
-.claude/
+# Nota: las reglas .claude/*.md SÍ se versionan (compartidas con el equipo).
+#       Se ignora settings local, caché y worktrees del agente.
+.claude/*
+!.claude/*.md
+.claude-cache/
+.claude-worktree/
+.claude-tmp/
 .claudeignore
 .gemini/
+.gemini-cache/
 .agents/
 .adal/
 .aider-desk/
@@ -36,6 +43,9 @@ auth.json
 .codestudio/
 .commandcode/
 .continue/
+.cursor/
+.cursor-cache/
+.cursorrules
 .cortex/
 .crush/
 .devin/
@@ -47,6 +57,7 @@ auth.json
 .iflow/
 .junie/
 .kilocode/
+.kimi/
 .kiro/
 .kode/
 .mcpjam/
@@ -67,6 +78,9 @@ auth.json
 .windsurfrules
 skills/
 skills-lock.json
+.skills/
+.skill-cache/
+.skill-temp/
 
 # --- 3. LOCAL SETTINGS (Settings Locales) ---
 # Configuraciones del IDE y archivos del sistema local/operativo
@@ -81,6 +95,7 @@ skills-lock.json
 .history/
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # --- 4. LOGS (Registros) ---
 # Logs de ejecución, depuración y del gestor de paquetes
@@ -110,6 +125,34 @@ tsconfig.tsbuildinfo
 *.tsbuildinfo
 *.bat
 *.bak
+*.backup
+*.old
+
+# Scripts y sandboxes temporales de desarrollo
+scripts-temp/
+tmp-scripts/
+temp-scripts/
+playground/
+experiments/
+prototypes/
+
+# Reportes y salidas generadas (auditorías, benchmarks, código/docs generados)
+reports/
+audit-results/
+performance-results/
+benchmark-results/
+generated/
+generated-code/
+generated-docs/
+
+# Exports y bases de datos locales
+exports/
+downloads/
+backup/
+backups/
+*.db
+*.sqlite
+*.sqlite3
 
 # --- 6. PRIVATE CONTEXTS & LOCAL TESTING (Contextos Privados) ---
 # Archivos de pruebas locales y notas de desarrollo personales
@@ -118,4 +161,8 @@ scratch/
 _archive_scripts/
 api-tests/
 private-context/
+prompts/
+prompt-drafts/
+contexts/
+sandbox/
 *.local
