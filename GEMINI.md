@@ -2,9 +2,10 @@
 
 ## 🤖 Directrices del Agente (Gemini & Antigravity)
 
-Para cualquier tarea de desarrollo, refactorización, base de datos, depuración o commit, debes leer y cumplir estrictamente las reglas locales ubicadas en el directorio `.claude/`:
-*   **Reglas Backend, NestJS, Prisma y Rendimiento:** Lee y aplica obligatoriamente [.claude/backend-rules.md](.claude/backend-rules.md) y [.claude/backend-product-rules.md](.claude/backend-product-rules.md) (para lógica del catálogo y productos) para todos los desarrollos de API, DTOs, rate limiting, validaciones, logs, testing y queries de base de datos.
+*   **Reglas Backend, NestJS, Prisma y Rendimiento:** Lee y aplica obligatoriamente [.claude/backend-rules.md](.claude/backend-rules.md) y [.claude/backend-product-rules.md](.claude/backend-product-rules.md) (para lógica del catálogo y productos).
+*   **Reglas de Facturación Electrónica DIAN:** Lee y aplica obligatoriamente [.claude/backend-dian-rules.md](.claude/backend-dian-rules.md).
 *   **Seguridad, Exclusiones y Git:** Lee y aplica obligatoriamente [.claude/git-security-rules.md](.claude/git-security-rules.md) para políticas de ignorado, protección de secretos y tokens, y validaciones previas a commits/push.
+
 
 ---
 
