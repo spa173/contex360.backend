@@ -1,0 +1,10 @@
+#!/bin/sh
+
+if git diff --cached --name-only | grep -E \
+"(\.env|\.pem|\.key|\.pfx|skills/|\.gemini/|\.cursor/|\.windsurf/|private-context/|\.claude/settings|\.claude/worktrees)"
+then
+  echo "❌ Archivo sensible detectado."
+  exit 1
+fi
+
+npx prisma format
