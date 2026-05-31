@@ -20,9 +20,9 @@
 ## 🗺️ Vista de sprints (12 semanas)
 
 ```
-Semana 1-2   │ Sprint 0 — Quick Wins P0 (ingresos + promesas rotas)
-Semana 3-4   │ Sprint 1 — Onboarding & Activación
-Semana 5-6   │ Sprint 2 — Inteligencia financiera (reportes + AI)
+Semana 1-2   │ Sprint 0 — Quick Wins P0 (ingresos, promesas rotas + reportes contables base)
+Semana 3-4   │ Sprint 1 — Onboarding, activación & OCR
+Semana 5-6   │ Sprint 2 — Inteligencia IA (sobre reportes ya existentes) & conciliación
 Semana 7-8   │ Sprint 3 — Resiliencia y seguridad operacional
 Semana 9-10  │ Sprint 4 — Escalabilidad de infraestructura
 Semana 11-12 │ Sprint 5 — Ecosistema y expansión
@@ -955,8 +955,8 @@ SIIGO_BASE_URL=https://api.siigo.com
            S1    S2    S3    S4    S5    S6    S7    S8    S9   S10   S11   S12
 P0-1 Quota  ████
 P0-2 Import ████ ████
-P0-3 Reports      ████ ████
-P0-4 Demo         ████
+P0-3 Reports ████ ████
+P0-4 Demo        ████
 P1-1 OCR               ████ ████
 P1-2 FinAdv                   ████ ████
 P1-3 Reconcile                     ████
